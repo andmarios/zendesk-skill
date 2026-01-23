@@ -8,6 +8,14 @@ when_to_use: When users ask about Zendesk tickets, support metrics, CSAT ratings
 
 A command-line interface for comprehensive Zendesk API integration. Run commands via `uv run zendesk <command>` in the skill directory.
 
+> **IMPORTANT: Always use `uv run`**
+>
+> All commands MUST be run with `uv run` to ensure dependencies are available:
+> - CLI commands: `uv run zendesk <command>`
+> - Python scripts: `uv run python src/zendesk_skill/scripts/<script>.py`
+>
+> Never use `python3` or `python` directly - it will fail with `ModuleNotFoundError`.
+
 ## Quick Start
 
 ```bash
@@ -637,10 +645,10 @@ For comprehensive analysis, use the included script:
 
 ```bash
 # Default: 2-week period ending today
-python3 src/zendesk_skill/scripts/analyze_support_metrics.py [search_file]
+uv run python src/zendesk_skill/scripts/analyze_support_metrics.py [search_file]
 
 # Explicit period
-python3 src/zendesk_skill/scripts/analyze_support_metrics.py search.json --start 2026-01-09 --end 2026-01-23
+uv run python src/zendesk_skill/scripts/analyze_support_metrics.py search.json --start 2026-01-09 --end 2026-01-23
 ```
 
 **Options:**
