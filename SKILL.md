@@ -118,6 +118,7 @@ Zendesk API responses can be very large (comments with HTML, many custom fields)
 | Command | Description | Example |
 |---------|-------------|---------|
 | `slack-report` | Send support report to Slack | `uv run zendesk slack-report [analysis_file]` |
+| `markdown-report` | Generate detailed markdown report | `uv run zendesk markdown-report [analysis_file] -o report.md` |
 
 ### Configuration
 

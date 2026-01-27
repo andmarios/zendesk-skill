@@ -5,11 +5,16 @@ Analyzes tickets from search results to generate comprehensive metrics including
 - Tickets per customer (by email domain)
 - Messages per customer and per ticket
 - Call detection
-- FRT and resolution time statistics
+- FRT and resolution time statistics (with proper time basis for on-call vs business hours)
 - Status and priority breakdown
+- FRT breakdown by priority
 
 Usage:
     python analyze_support_metrics.py [search_results_file] [--start DATE] [--end DATE] [--output DIR]
+
+Options:
+    --include-untouched  Include tickets where support didn't reply (default: filter to tickets with replies)
+    --fetch-metrics      Fetch ticket metrics from API (required for accurate reply counts and FRT)
 
 If no arguments provided, uses most recent search file in temp directory.
 Default period is 2 weeks ending today.
@@ -24,6 +29,7 @@ import tempfile
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from statistics import mean, median
 from zoneinfo import ZoneInfo
 
 # Add parent to path to import client
@@ -99,17 +105,118 @@ def is_oncall_hours(dt: datetime, config: dict, tz: ZoneInfo, workdays: list[int
     return False
 
 
-def detect_calls(comments: list) -> bool:
-    """Detect if any comment mentions a call/phone conversation."""
-    call_pattern = re.compile(
-        r"\b(call|called|phone|spoke|speaking|conversation|rang|ring)\b",
+def detect_calls(comments: list) -> dict:
+    """Detect and count calls/meetings from comments.
+
+    Returns dict with:
+        - detected: bool - whether any call indicators found
+        - confirmed: int - number of confirmed calls (evidence call happened)
+        - likely: int - number of likely calls (link + setup but no confirmation)
+        - requests: int - number of call requests (no evidence call happened)
+        - total_estimated: int - confirmed + likely
+        - links: list - unique meeting links found
+        - evidence: list - evidence phrases found for confirmed calls
+        - link_details: list - dict with platform and link for likely calls
+    """
+    # Patterns indicating a call was set up or requested
+    setup_patterns = re.compile(
+        r'quick call|setup a call|set up a call|schedule[d]? (?:a )?call|'
+        r'let.*s call|call to discuss|join.*(?:the |this )?(?:call|zoom|meeting)|'
+        r'meeting invitation|video call|phone call|can.*call|available for.*call|'
+        r'connect (?:in|on)',
         re.IGNORECASE
     )
+
+    # Patterns indicating a call actually happened (with capture for evidence)
+    happened_patterns = re.compile(
+        r'((?:we |our )?(?:call|meeting) (?:closed|ended|finished)|'
+        r'we closed our call|after (?:the|our) (?:call|meeting)|'
+        r'meeting notes|following (?:the|our) (?:call|meeting)|'
+        r'spoke (?:on|with|to|about)|talked (?:on|with|to)|'
+        r'on (?:the|our) call|during (?:the|our) call|state after.*call)',
+        re.IGNORECASE
+    )
+
+    # Meeting link patterns with platform detection
+    zoom_pattern = re.compile(r'(zoom\.us/[jm]/\d+)', re.IGNORECASE)
+    teams_pattern = re.compile(r'(teams\.microsoft\.com[^\s]*)', re.IGNORECASE)
+    meet_pattern = re.compile(r'(meet\.google\.com[^\s]*)', re.IGNORECASE)
+
+    # False positive patterns to exclude
+    exclude_patterns = re.compile(
+        r'callback|recall|localhost|api\.call|function.?call|method.?call|system.?call',
+        re.IGNORECASE
+    )
+
+    setup_count = 0
+    happened_count = 0
+    links = set()
+    evidence_phrases = []
+    link_details = []
+
     for comment in comments:
         body = comment.get("plain_body") or comment.get("body") or ""
-        if call_pattern.search(body):
-            return True
-    return False
+
+        if exclude_patterns.search(body):
+            continue
+
+        if setup_patterns.search(body):
+            setup_count += 1
+
+        # Capture evidence phrases
+        happened_matches = happened_patterns.findall(body)
+        if happened_matches:
+            happened_count += len(happened_matches)
+            evidence_phrases.extend(happened_matches)
+
+        # Capture links with platform info
+        for match in zoom_pattern.findall(body):
+            links.add(match)
+            link_details.append({"platform": "Zoom", "link": match})
+        for match in teams_pattern.findall(body):
+            link = match.split()[0]  # Take just the URL part
+            links.add(link)
+            link_details.append({"platform": "Teams", "link": link})
+        for match in meet_pattern.findall(body):
+            link = match.split()[0]
+            links.add(link)
+            link_details.append({"platform": "Meet", "link": link})
+
+    # Estimate actual calls
+    if happened_count > 0:
+        # Confirmed - we have evidence call happened
+        confirmed = max(happened_count, 1)
+        likely = 0
+    elif links and setup_count > 0:
+        # Likely - zoom link shared with setup discussion
+        confirmed = 0
+        likely = 1
+    else:
+        confirmed = 0
+        likely = 0
+
+    requests = setup_count if confirmed == 0 and likely == 0 else 0
+    total_estimated = confirmed + likely
+    detected = total_estimated > 0 or requests > 0
+
+    # Deduplicate link_details
+    seen_links = set()
+    unique_link_details = []
+    for ld in link_details:
+        if ld["link"] not in seen_links:
+            seen_links.add(ld["link"])
+            unique_link_details.append(ld)
+
+    return {
+        "detected": detected,
+        "confirmed": confirmed,
+        "likely": likely,
+        "requests": requests,
+        "total_estimated": total_estimated,
+        "links": list(links),
+        "evidence": list(set(evidence_phrases))[:3],  # Top 3 unique evidence phrases
+        "link_details": unique_link_details[:3],  # Top 3 unique links
+    }
 
 
 def mins_to_human(mins: float | None) -> str:
@@ -124,6 +231,177 @@ def mins_to_human(mins: float | None) -> str:
         return f"{mins/1440:.1f}d"
 
 
+def fetch_ticket_metrics(ticket_ids: list[int], base_dir: Path, skill_dir: Path) -> dict[int, dict]:
+    """Fetch ticket metrics for all tickets to get accurate reply counts and FRT.
+
+    Args:
+        ticket_ids: List of ticket IDs to fetch metrics for
+        base_dir: Directory where metrics will be saved
+        skill_dir: Path to zendesk-skill directory (for running uv commands)
+
+    Returns:
+        Dict mapping ticket_id -> metrics dict
+    """
+    all_metrics = {}
+    total = len(ticket_ids)
+
+    for i, tid in enumerate(ticket_ids):
+        if i % 20 == 0:
+            print(f"Fetching metrics: {i}/{total}...")
+
+        # Check if already fetched
+        ticket_dir = base_dir / str(tid)
+        existing_metrics = list(ticket_dir.glob("ticket_metrics_*.json")) if ticket_dir.exists() else []
+        if existing_metrics:
+            with open(existing_metrics[0]) as f:
+                data = json.load(f)
+                metric = data.get("data", {}).get("ticket_metric", {})
+                all_metrics[tid] = {
+                    "ticket_id": tid,
+                    "replies": metric.get("replies", 0),
+                    "frt_calendar": metric.get("reply_time_in_minutes", {}).get("calendar"),
+                    "frt_business": metric.get("reply_time_in_minutes", {}).get("business"),
+                    "resolution_calendar": metric.get("full_resolution_time_in_minutes", {}).get("calendar"),
+                    "resolution_business": metric.get("full_resolution_time_in_minutes", {}).get("business"),
+                    "reopens": metric.get("reopens", 0),
+                }
+            continue
+
+        # Fetch from API
+        result = subprocess.run(
+            ["uv", "run", "zendesk", "ticket-metrics", str(tid)],
+            capture_output=True, text=True, cwd=str(skill_dir)
+        )
+        if result.returncode == 0:
+            try:
+                # The CLI saves to file, but we parse stdout for consistency
+                output = json.loads(result.stdout)
+                metric = output.get("data", {}).get("ticket_metric", {})
+                all_metrics[tid] = {
+                    "ticket_id": tid,
+                    "replies": metric.get("replies", 0),
+                    "frt_calendar": metric.get("reply_time_in_minutes", {}).get("calendar"),
+                    "frt_business": metric.get("reply_time_in_minutes", {}).get("business"),
+                    "resolution_calendar": metric.get("full_resolution_time_in_minutes", {}).get("calendar"),
+                    "resolution_business": metric.get("full_resolution_time_in_minutes", {}).get("business"),
+                    "reopens": metric.get("reopens", 0),
+                }
+            except json.JSONDecodeError:
+                print(f"Warning: Failed to parse metrics for ticket {tid}", file=sys.stderr)
+
+    print(f"Fetched metrics for {len(all_metrics)} tickets")
+    return all_metrics
+
+
+def calculate_frt_by_priority(
+    ticket_data: list[dict],
+    metrics: dict[int, dict],
+    oncall_customers: list[str],
+    oncall_priorities: list[str],
+) -> dict:
+    """Calculate FRT breakdown by priority using proper time basis.
+
+    For tickets matching on-call criteria (priority + customer), uses calendar time (24/7).
+    For all other tickets, uses business hours time.
+
+    Args:
+        ticket_data: List of ticket analysis dicts (with customer, priority)
+        metrics: Dict of ticket_id -> metrics
+        oncall_customers: List of customer domains for on-call (empty = all)
+        oncall_priorities: List of priority values for on-call (e.g., ["urgent"])
+
+    Returns:
+        Dict with FRT stats per category
+    """
+    # Group tickets by FRT category
+    categories = {
+        "oncall": [],      # On-call priority + customer (uses calendar time)
+        "urgent": [],      # Urgent not matching on-call (uses business time)
+        "high": [],        # High priority (uses business time)
+        "normal": [],      # Normal priority (uses business time)
+        "low": [],         # Low priority (uses business time)
+    }
+
+    for ticket in ticket_data:
+        tid = ticket["ticket_id"]
+        priority = ticket.get("priority", "normal")
+        customer = ticket.get("customer", "unknown")
+
+        metric = metrics.get(tid, {})
+        replies = metric.get("replies", 0)
+
+        if replies == 0:
+            continue  # Skip tickets without replies
+
+        frt_calendar = metric.get("frt_calendar")
+        frt_business = metric.get("frt_business")
+
+        if frt_calendar is None:
+            continue
+
+        # Determine if this is an on-call ticket
+        priority_match = priority in oncall_priorities
+        customer_match = len(oncall_customers) == 0 or customer in oncall_customers
+        is_oncall = priority_match and customer_match
+
+        if is_oncall:
+            # On-call tickets use calendar time (24/7 coverage)
+            categories["oncall"].append({
+                "ticket_id": tid,
+                "priority": priority,
+                "customer": customer,
+                "frt": frt_calendar,
+            })
+        elif priority == "urgent":
+            # Non-on-call urgent uses business hours
+            categories["urgent"].append({
+                "ticket_id": tid,
+                "customer": customer,
+                "frt": frt_business if frt_business else frt_calendar,
+            })
+        elif priority == "high":
+            categories["high"].append({
+                "ticket_id": tid,
+                "frt": frt_business if frt_business else frt_calendar,
+            })
+        elif priority == "low":
+            categories["low"].append({
+                "ticket_id": tid,
+                "frt": frt_business if frt_business else frt_calendar,
+            })
+        else:  # normal
+            categories["normal"].append({
+                "ticket_id": tid,
+                "frt": frt_business if frt_business else frt_calendar,
+            })
+
+    # Calculate stats per category
+    results = {}
+    for cat_name, cat_data in categories.items():
+        if not cat_data:
+            results[cat_name] = {"count": 0}
+            continue
+
+        frt_list = [d["frt"] for d in cat_data if d["frt"] is not None]
+        if not frt_list:
+            results[cat_name] = {"count": len(cat_data)}
+            continue
+
+        results[cat_name] = {
+            "count": len(cat_data),
+            "avg_mins": mean(frt_list),
+            "median_mins": median(frt_list),
+            "min_mins": min(frt_list),
+            "max_mins": max(frt_list),
+            "under_30m": sum(1 for f in frt_list if f <= 30),
+            "under_1h": sum(1 for f in frt_list if f <= 60),
+            "under_4h": sum(1 for f in frt_list if f <= 240),
+            "under_8h": sum(1 for f in frt_list if f <= 480),
+        }
+
+    return results
+
+
 def main():
     base_dir = Path(tempfile.gettempdir()) / "zendesk-skill"
 
@@ -133,6 +411,16 @@ def main():
     parser.add_argument("--start", help="Period start date (YYYY-MM-DD). Default: 14 days ago")
     parser.add_argument("--end", help="Period end date (YYYY-MM-DD). Default: today")
     parser.add_argument("--output", "-o", help="Output directory")
+    parser.add_argument(
+        "--include-untouched",
+        action="store_true",
+        help="Include tickets without agent replies (default: only tickets we replied to)"
+    )
+    parser.add_argument(
+        "--fetch-metrics",
+        action="store_true",
+        help="Fetch ticket metrics from API (required for accurate reply counts and FRT)"
+    )
     args = parser.parse_args()
 
     # Find search file
@@ -185,7 +473,55 @@ def main():
         search_data = json.load(f)
 
     tickets = search_data.get("data", {}).get("results", [])
-    print(f"Found {len(tickets)} tickets")
+    print(f"Found {len(tickets)} tickets in search results")
+
+    # Skill directory for running uv commands
+    skill_dir = Path(__file__).parent.parent.parent.parent
+
+    # Fetch metrics for all tickets if requested (enables accurate reply counts)
+    all_metrics = {}
+    if args.fetch_metrics:
+        print("\nFetching ticket metrics for accurate reply counts...")
+        ticket_ids = [t.get("id") for t in tickets if t.get("id")]
+        all_metrics = fetch_ticket_metrics(ticket_ids, base_dir, skill_dir)
+
+    # Filter to tickets with replies (unless --include-untouched)
+    if not args.include_untouched:
+        if all_metrics:
+            # Use fetched metrics for accurate filtering
+            tickets_with_replies = {tid for tid, m in all_metrics.items() if m.get("replies", 0) > 0}
+            original_count = len(tickets)
+            tickets = [t for t in tickets if t.get("id") in tickets_with_replies]
+            print(f"Filtered to {len(tickets)} tickets with agent replies (excluded {original_count - len(tickets)} untouched)")
+        else:
+            # Without metrics, check if metrics files exist locally
+            filtered = []
+            for t in tickets:
+                tid = t.get("id")
+                ticket_dir = base_dir / str(tid)
+                metrics_files = list(ticket_dir.glob("ticket_metrics_*.json")) if ticket_dir.exists() else []
+                if metrics_files:
+                    with open(metrics_files[0]) as f:
+                        data = json.load(f)
+                        replies = data.get("data", {}).get("ticket_metric", {}).get("replies", 0)
+                        if replies > 0:
+                            filtered.append(t)
+                            all_metrics[tid] = {
+                                "ticket_id": tid,
+                                "replies": replies,
+                                "frt_calendar": data.get("data", {}).get("ticket_metric", {}).get("reply_time_in_minutes", {}).get("calendar"),
+                                "frt_business": data.get("data", {}).get("ticket_metric", {}).get("reply_time_in_minutes", {}).get("business"),
+                                "resolution_calendar": data.get("data", {}).get("ticket_metric", {}).get("full_resolution_time_in_minutes", {}).get("calendar"),
+                                "resolution_business": data.get("data", {}).get("ticket_metric", {}).get("full_resolution_time_in_minutes", {}).get("business"),
+                                "reopens": data.get("data", {}).get("ticket_metric", {}).get("reopens", 0),
+                            }
+                else:
+                    # If no metrics, include ticket (can't verify reply count)
+                    filtered.append(t)
+            tickets = filtered
+            print(f"Filtered to {len(tickets)} tickets (based on local metrics files)")
+
+    print(f"Analyzing {len(tickets)} tickets")
 
     # Get unique requester IDs and fetch emails
     requester_ids = set(t.get("requester_id") for t in tickets if t.get("requester_id"))
@@ -212,7 +548,7 @@ def main():
 
     # Analyze tickets
     ticket_analysis = []
-    customer_stats = defaultdict(lambda: {"tickets": 0, "messages": 0, "calls": 0, "ticket_ids": []})
+    customer_stats = defaultdict(lambda: {"tickets": 0, "messages": 0, "replies": 0, "calls": 0, "ticket_ids": []})
     status_counts = defaultdict(int)
     priority_counts = defaultdict(int)
     frt_values = []
@@ -257,7 +593,7 @@ def main():
         msg_count = 0
         public_count = 0
         private_count = 0
-        has_calls = False
+        call_info = {"detected": False, "confirmed": 0, "likely": 0, "requests": 0, "total_estimated": 0, "links": []}
         ticket_customer_msgs_ooh = 0
         ticket_support_replies_ooh = 0
 
@@ -268,7 +604,7 @@ def main():
             msg_count = len(comments)
             public_count = sum(1 for c in comments if c.get("public", True))
             private_count = msg_count - public_count
-            has_calls = detect_calls(comments)
+            call_info = detect_calls(comments)
 
             # Analyze each comment for business hours (only if configured)
             if track_business_hours:
@@ -286,25 +622,49 @@ def main():
                             ticket_support_replies_ooh += 1
                             support_replies_outside_hours += 1
 
-        # Get metrics
+        # Get metrics - prefer pre-loaded all_metrics, fallback to file
         frt = None
+        frt_calendar = None
+        frt_business = None
         resolution = None
         reopens = 0
+        replies = 0
 
-        if metrics_file:
+        if tid in all_metrics:
+            # Use pre-loaded metrics
+            metric = all_metrics[tid]
+            frt_calendar = metric.get("frt_calendar")
+            frt_business = metric.get("frt_business")
+            resolution = metric.get("resolution_calendar")
+            reopens = metric.get("reopens", 0)
+            replies = metric.get("replies", 0)
+        elif metrics_file:
+            # Fallback to metrics file
             with open(metrics_file) as f:
                 metrics_data = json.load(f)
             metric = metrics_data.get("data", {}).get("ticket_metric", {})
-            frt = metric.get("reply_time_in_minutes", {}).get("calendar")
+            frt_calendar = metric.get("reply_time_in_minutes", {}).get("calendar")
+            frt_business = metric.get("reply_time_in_minutes", {}).get("business")
             resolution = metric.get("full_resolution_time_in_minutes", {}).get("calendar")
             reopens = metric.get("reopens", 0)
+            replies = metric.get("replies", 0)
 
-            if frt is not None:
-                frt_values.append(frt)
-            if resolution is not None:
-                resolution_values.append(resolution)
-            if reopens > 0:
-                reopen_count += 1
+        # Determine FRT based on on-call status
+        # On-call tickets use calendar time, others use business hours
+        oncall_priorities_list = oncall_settings.get("priorities", ["urgent"]) if oncall_settings else ["urgent"]
+        oncall_customers_list = oncall_settings.get("customers", []) if oncall_settings else []
+
+        priority_match = priority in oncall_priorities_list
+        # Customer is set below, so we'll calculate FRT after customer is resolved
+        # For now, store both values
+        frt = frt_calendar  # Will be recalculated later with proper time basis
+
+        if frt_calendar is not None:
+            frt_values.append(frt_calendar)  # For backward compatibility
+        if resolution is not None:
+            resolution_values.append(resolution)
+        if reopens > 0:
+            reopen_count += 1
 
         # Customer stats (need email/customer before ticket_analysis)
         email = user_emails.get(rid, "")
@@ -319,10 +679,13 @@ def main():
             "messages": msg_count,
             "public": public_count,
             "private": private_count,
-            "has_calls": has_calls,
+            "call_info": call_info,
             "frt_mins": frt,
+            "frt_calendar": frt_calendar,
+            "frt_business": frt_business,
             "resolution_mins": resolution,
             "reopens": reopens,
+            "replies": replies,
             "outside_hours": ticket_outside_hours,
             "customer_msgs_ooh": ticket_customer_msgs_ooh,
             "support_replies_ooh": ticket_support_replies_ooh,
@@ -362,11 +725,11 @@ def main():
         # Customer stats
         customer_stats[customer]["tickets"] += 1
         customer_stats[customer]["messages"] += msg_count
+        customer_stats[customer]["replies"] += replies
         customer_stats[customer]["ticket_ids"].append(tid)
-        if has_calls:
-            customer_stats[customer]["calls"] += 1
+        customer_stats[customer]["calls"] += call_info["total_estimated"]
 
-    # Calculate FRT stats
+    # Calculate FRT stats (overall - using calendar time for backward compatibility)
     frt_stats = {}
     if frt_values:
         frt_stats = {
@@ -377,6 +740,13 @@ def main():
             "count": len(frt_values),
         }
 
+    # Calculate FRT by priority using proper time basis
+    oncall_customers_list = oncall_settings.get("customers", []) if oncall_settings else []
+    oncall_priorities_list = oncall_settings.get("priorities", ["urgent"]) if oncall_settings else ["urgent"]
+    frt_by_priority = calculate_frt_by_priority(
+        ticket_analysis, all_metrics, oncall_customers_list, oncall_priorities_list
+    )
+
     resolution_stats = {}
     if resolution_values:
         resolution_stats = {
@@ -386,6 +756,9 @@ def main():
             "count": len(resolution_values),
         }
 
+    # Calculate total replies from metrics
+    total_replies = sum(t.get("replies", 0) for t in ticket_analysis)
+
     # Build output (period_info comes from command line args)
     output = {
         "ticket_analysis": ticket_analysis,
@@ -393,13 +766,18 @@ def main():
         "summary": {
             "total_tickets": len(tickets),
             "total_messages": sum(t["messages"] for t in ticket_analysis),
-            "tickets_with_calls": sum(1 for t in ticket_analysis if t["has_calls"]),
+            "total_replies": total_replies,
+            "tickets_with_calls": sum(1 for t in ticket_analysis if t["call_info"]["total_estimated"] > 0),
+            "total_calls_confirmed": sum(t["call_info"]["confirmed"] for t in ticket_analysis),
+            "total_calls_likely": sum(t["call_info"]["likely"] for t in ticket_analysis),
+            "total_calls_estimated": sum(t["call_info"]["total_estimated"] for t in ticket_analysis),
             "unique_customers": len(customer_stats),
         },
         "period": period_info,
         "status_breakdown": dict(status_counts),
         "priority_breakdown": dict(priority_counts),
         "frt_stats": frt_stats,
+        "frt_by_priority": frt_by_priority,
         "resolution_stats": resolution_stats,
         "reopen_count": reopen_count,
     }
@@ -419,6 +797,70 @@ def main():
                 "engagements": oncall_engagements,
             }
 
+    # Build detailed call analysis
+    confirmed_detail = []
+    likely_detail = []
+    call_by_customer: dict[str, dict] = {}
+
+    for t in ticket_analysis:
+        call_info = t.get("call_info", {})
+        customer = t.get("customer", "unknown")
+
+        # Track calls by customer
+        if customer not in call_by_customer:
+            call_by_customer[customer] = {"tickets": 0, "calls": 0}
+        call_by_customer[customer]["tickets"] += 1
+        if call_info.get("total_estimated", 0) > 0:
+            call_by_customer[customer]["calls"] += call_info["total_estimated"]
+
+        # Collect confirmed call details
+        if call_info.get("confirmed", 0) > 0:
+            evidence = call_info.get("evidence", [])
+            evidence_str = " + ".join(evidence[:2]) if evidence else "Evidence in comments"
+            # Check for links to add to evidence
+            if call_info.get("links"):
+                link_type = "zoom link" if any("zoom" in l.lower() for l in call_info["links"]) else "meeting link"
+                evidence_str = f'"{evidence[0]}" + {link_type}' if evidence else link_type
+            confirmed_detail.append({
+                "ticket_id": t["ticket_id"],
+                "count": call_info["confirmed"],
+                "evidence": evidence_str,
+            })
+
+        # Collect likely call details
+        elif call_info.get("likely", 0) > 0:
+            link_details = call_info.get("link_details", [])
+            if link_details:
+                for ld in link_details[:1]:  # Just first link per ticket
+                    likely_detail.append({
+                        "ticket_id": t["ticket_id"],
+                        "platform": ld.get("platform", "Unknown"),
+                        "link": ld.get("link", "N/A"),
+                    })
+            elif call_info.get("links"):
+                link = call_info["links"][0]
+                platform = "Zoom" if "zoom" in link.lower() else ("Teams" if "teams" in link.lower() else "Meet")
+                likely_detail.append({
+                    "ticket_id": t["ticket_id"],
+                    "platform": platform,
+                    "link": link,
+                })
+
+    # Sort confirmed by count descending
+    confirmed_detail.sort(key=lambda x: x["count"], reverse=True)
+
+    # Filter call_by_customer to only those with calls
+    call_by_customer = {k: v for k, v in call_by_customer.items() if v["calls"] > 0}
+
+    output["call_analysis"] = {
+        "tickets_with_calls": output["summary"]["tickets_with_calls"],
+        "confirmed_calls": output["summary"]["total_calls_confirmed"],
+        "likely_calls": output["summary"]["total_calls_likely"],
+        "confirmed_detail": confirmed_detail,
+        "likely_detail": likely_detail,
+        "by_customer": call_by_customer,
+    }
+
     # Print report
     print("\n" + "=" * 70)
     print("SUPPORT METRICS REPORT")
@@ -426,8 +868,9 @@ def main():
 
     print(f"\n### Summary")
     print(f"Total Tickets: {len(tickets)}")
-    print(f"Total Messages: {output['summary']['total_messages']}")
-    print(f"Tickets with Calls: {output['summary']['tickets_with_calls']}")
+    print(f"Total Agent Replies: {total_replies}")
+    print(f"Total Messages (from ticket-details): {output['summary']['total_messages']}")
+    print(f"Tickets with Calls: {output['summary']['tickets_with_calls']} ({output['summary']['total_calls_estimated']} calls: {output['summary']['total_calls_confirmed']} confirmed, {output['summary']['total_calls_likely']} likely)")
     print(f"Unique Customers: {len(customer_stats)}")
 
     if frt_stats:
@@ -442,6 +885,43 @@ def main():
 
     print(f"Reopen Rate: {reopen_count}/{len(tickets)} ({100*reopen_count/len(tickets):.0f}%)")
 
+    # FRT by priority breakdown (with proper time basis)
+    if frt_by_priority:
+        print(f"\n### FRT by Priority")
+        if oncall_settings and oncall_settings.get("enabled"):
+            oncall_desc = ", ".join(oncall_customers_list) if oncall_customers_list else "all customers"
+            print(f"  (On-call customers: {oncall_desc} - measured in calendar time 24/7)")
+            print(f"  (Other tickets - measured in business hours only)")
+
+        # On-call category
+        if frt_by_priority.get("oncall", {}).get("count", 0) > 0:
+            stats = frt_by_priority["oncall"]
+            pct_30m = 100 * stats.get("under_30m", 0) / stats["count"]
+            print(f"  ON-CALL (24/7): {stats['count']} tickets, Median: {mins_to_human(stats.get('median_mins'))}, <30m: {pct_30m:.0f}%")
+
+        # Other urgent
+        if frt_by_priority.get("urgent", {}).get("count", 0) > 0:
+            stats = frt_by_priority["urgent"]
+            pct_1h = 100 * stats.get("under_1h", 0) / stats["count"]
+            print(f"  URGENT (biz hrs): {stats['count']} tickets, Median: {mins_to_human(stats.get('median_mins'))}, <1h: {pct_1h:.0f}%")
+
+        # High
+        if frt_by_priority.get("high", {}).get("count", 0) > 0:
+            stats = frt_by_priority["high"]
+            pct_4h = 100 * stats.get("under_4h", 0) / stats["count"]
+            print(f"  HIGH (biz hrs): {stats['count']} tickets, Median: {mins_to_human(stats.get('median_mins'))}, <4h: {pct_4h:.0f}%")
+
+        # Normal
+        if frt_by_priority.get("normal", {}).get("count", 0) > 0:
+            stats = frt_by_priority["normal"]
+            pct_4h = 100 * stats.get("under_4h", 0) / stats["count"]
+            print(f"  NORMAL (biz hrs): {stats['count']} tickets, Median: {mins_to_human(stats.get('median_mins'))}, <4h: {pct_4h:.0f}%")
+
+        # Low
+        if frt_by_priority.get("low", {}).get("count", 0) > 0:
+            stats = frt_by_priority["low"]
+            print(f"  LOW (biz hrs): {stats['count']} tickets, Median: {mins_to_human(stats.get('median_mins'))}")
+
     print(f"\n### Status Breakdown")
     for status, count in sorted(status_counts.items()):
         print(f"  {status}: {count}")
@@ -452,7 +932,9 @@ def main():
 
     print(f"\n### Tickets per Customer")
     for customer, stats in sorted(customer_stats.items(), key=lambda x: x[1]["tickets"], reverse=True):
-        print(f"  {customer}: {stats['tickets']} tickets, {stats['messages']} msgs, {stats['calls']} calls")
+        replies_str = f", {stats.get('replies', 0)} replies" if stats.get('replies', 0) > 0 else ""
+        calls_str = f", {stats['calls']} calls" if stats['calls'] > 0 else ""
+        print(f"  {customer}: {stats['tickets']} tickets{replies_str}{calls_str}")
 
     # Business hours section (only if configured)
     if track_business_hours:

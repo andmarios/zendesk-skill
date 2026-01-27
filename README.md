@@ -298,6 +298,7 @@ uv run zendesk attachment --ticket 12345 "https://..."
 - `zendesk slack-status` - Check Slack configuration
 - `zendesk slack-delete` - Remove Slack configuration
 - `zendesk slack-report` - Send report to Slack (reads JSON from stdin)
+- `zendesk markdown-report` - Generate detailed markdown report (stdout or file)
 
 ### Utility
 - `zendesk query` - Query saved files with jq
@@ -307,24 +308,62 @@ uv run zendesk attachment --ticket 12345 "https://..."
 Generate comprehensive support metrics reports:
 
 ```bash
-# Default: last 2 weeks
+# Default: last 2 weeks, only tickets we replied to
 uv run python src/zendesk_skill/scripts/analyze_support_metrics.py
+
+# Fetch metrics from API for accurate reply counts (recommended for first run)
+uv run python src/zendesk_skill/scripts/analyze_support_metrics.py --fetch-metrics
 
 # Custom date range
 uv run python src/zendesk_skill/scripts/analyze_support_metrics.py \
-  --start 2026-01-01 --end 2026-01-15
+  --start 2026-01-01 --end 2026-01-15 --fetch-metrics
+
+# Include tickets without agent replies
+uv run python src/zendesk_skill/scripts/analyze_support_metrics.py --include-untouched
 
 # Pipe to Slack
 uv run python src/zendesk_skill/scripts/analyze_support_metrics.py | \
   uv run zendesk slack-report
+
+# Generate detailed markdown report
+uv run zendesk markdown-report -o support_report.md
+
+# Or print to stdout
+uv run zendesk markdown-report
 ```
+
+**Options:**
+- `--fetch-metrics` - Fetch ticket metrics from API (required for accurate reply counts and FRT)
+- `--include-untouched` - Include tickets without agent replies (default: filter to tickets we replied to)
+- `--start DATE` - Period start date (YYYY-MM-DD). Default: 14 days ago
+- `--end DATE` - Period end date (YYYY-MM-DD). Default: today
+- `--output DIR` - Output directory for JSON file
 
 The report includes:
 - **Ticket volume** - Total, by priority, by status
-- **Response times** - First response, full resolution
-- **CSAT scores** - Average rating, response rate
+- **Response times** - First response time (FRT), full resolution time
+- **FRT by priority** - With proper time basis (calendar for on-call, business hours for others)
+- **Reply counts** - Accurate agent reply counts from Zendesk Ticket Metrics API
+- **Customer breakdown** - Tickets and replies per customer domain
 - **Business hours activity** (if configured) - After-hours tickets, messages, replies
 - **On-call engagements** (if configured) - Urgent tickets during on-call hours
+
+### FRT Time Basis
+
+The script uses the proper time basis for FRT calculation:
+- **On-call tickets** (matching configured priority + customer): Calendar time (24/7 measurement)
+- **All other tickets**: Business hours time only
+
+Configure on-call customers in `~/.claude/.zendesk-skill/config.json`:
+```json
+{
+  "oncall": {
+    "enabled": true,
+    "customers": ["important-customer.com"],
+    "priorities": ["urgent"]
+  }
+}
+```
 
 ## File Storage
 
