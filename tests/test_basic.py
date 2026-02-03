@@ -20,7 +20,7 @@ def test_cli_has_commands():
 
     # Get registered commands
     commands = list(app.registered_commands)
-    assert len(commands) == 25
+    assert len(commands) == 27
 
 
 def test_cli_command_names():
@@ -172,7 +172,7 @@ def test_client_auth_header():
 
 def test_client_singleton():
     """Test client singleton pattern."""
-    from zendesk_skill.client import reset_client
+    from zendesk_skill.client import reset_client, CONFIG_PATH
 
     # Reset to clear any existing singleton
     reset_client()
@@ -187,11 +187,21 @@ def test_client_singleton():
         "ZENDESK_SUBDOMAIN": os.environ.get("ZENDESK_SUBDOMAIN"),
     }
 
+    # Save config file if it exists
+    saved_config = None
+    if CONFIG_PATH.exists():
+        with open(CONFIG_PATH) as f:
+            saved_config = f.read()
+
     try:
         # Clear env vars
         for key in saved:
             if key in os.environ:
                 del os.environ[key]
+
+        # Temporarily remove config file
+        if CONFIG_PATH.exists():
+            CONFIG_PATH.unlink()
 
         from zendesk_skill.client import ZendeskAuthError, ZendeskClient
 
@@ -203,6 +213,14 @@ def test_client_singleton():
         for key, value in saved.items():
             if value is not None:
                 os.environ[key] = value
+
+        # Restore config file
+        if saved_config is not None:
+            CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(CONFIG_PATH, "w") as f:
+                f.write(saved_config)
+            CONFIG_PATH.chmod(0o600)
+
         reset_client()
 
 
@@ -238,10 +256,17 @@ def test_auth_subcommands_exist():
 
     command_names = [cmd.name for cmd in auth_app.registered_commands]
 
+    # Zendesk auth commands
     assert "login" in command_names
     assert "status" in command_names
     assert "logout" in command_names
-    assert len(command_names) == 3
+
+    # Slack auth commands
+    assert "login-slack" in command_names
+    assert "status-slack" in command_names
+    assert "logout-slack" in command_names
+
+    assert len(command_names) == 6
 
 
 def test_get_auth_status():
