@@ -340,7 +340,7 @@ wheels = [
 [[package]]
 name = "prompt-security-utils"
 version = "0.1.0"
-source = { git = "https://github.com/andmarios/prompt-security-utils#02326a22cceb74e7d08f0c61f06383c78920e989" }
+source = { git = "https://github.com/andmarios/prompt-security-utils#671068c7b8e755b641dbbc3bfe48d8bd6b37ffb1" }
 dependencies = [
     { name = "httpx" },
 ]
