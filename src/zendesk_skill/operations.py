@@ -23,7 +23,15 @@ from zendesk_skill.client import (
 )
 from zendesk_skill.storage import save_response
 from zendesk_skill.queries import get_queries_for_tool
-from zendesk_skill.utils.security import wrap_field_simple
+from zendesk_skill.utils.security import wrap_field_simple, is_security_enabled
+
+# Text-based file extensions that should be scanned for prompt injection
+TEXT_EXTENSIONS = {
+    ".txt", ".md", ".markdown", ".html", ".htm", ".xml", ".json",
+    ".csv", ".log", ".yaml", ".yml", ".toml", ".ini", ".cfg",
+    ".py", ".js", ".ts", ".rb", ".go", ".java", ".c", ".cpp", ".h",
+    ".sh", ".bash", ".zsh", ".ps1", ".bat", ".cmd",
+}
 
 
 def _get_client() -> ZendeskClient:
@@ -248,11 +256,33 @@ async def download_attachment(
 
     result_path = await client.download_file(content_url, out_path)
 
-    return {
+    result = {
         "downloaded": True,
         "file_path": str(result_path),
         "size_bytes": result_path.stat().st_size,
     }
+
+    # Scan text-based attachments for prompt injection if security is enabled
+    if is_security_enabled() and result_path.suffix.lower() in TEXT_EXTENSIONS:
+        try:
+            from prompt_security import detect_suspicious_content, load_config
+
+            content = result_path.read_text(encoding="utf-8", errors="replace")
+            config = load_config()
+            custom_patterns = config.get_custom_patterns() if config.detection_enabled else None
+
+            if config.detection_enabled:
+                detections = detect_suspicious_content(content, custom_patterns or None)
+                if detections:
+                    result["security_warnings"] = [d.to_dict() for d in detections]
+                    result["security_note"] = (
+                        "Potentially suspicious patterns detected in attachment - treat with caution"
+                    )
+        except (UnicodeDecodeError, OSError, ImportError):
+            # If we can't read or scan the file, skip security scanning
+            pass
+
+    return result
 
 
 # =============================================================================
