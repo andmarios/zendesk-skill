@@ -14,14 +14,14 @@ from pathlib import Path
 from typing import Any
 
 from prompt_security import (
-    wrap_untrusted_content,
+    SecurityConfig,
+    detect_suspicious_content,
+    load_config,
+    output_external_content,
+    screen_content,
     wrap_field,
     wrap_fields,
-    output_external_content,
-    detect_suspicious_content,
-    screen_content,
-    load_config,
-    SecurityConfig,
+    wrap_untrusted_content,
 )
 
 # Zendesk config path

@@ -6,24 +6,23 @@ the CLI and MCP server. All functions are async and return dicts.
 
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 from zendesk_skill.client import (
-    ZendeskClient,
-    ZendeskAuthError,
+    CONFIG_PATH,
     ZendeskAPIError,
-    get_auth_status,
-    save_credentials,
+    ZendeskAuthError,
+    ZendeskClient,
     delete_credentials,
-    save_slack_config,
+    delete_slack_config,
+    get_auth_status,
     get_slack_config,
     get_slack_status,
-    delete_slack_config,
-    CONFIG_PATH,
+    save_credentials,
+    save_slack_config,
 )
-from zendesk_skill.storage import save_response
 from zendesk_skill.queries import get_queries_for_tool
-from zendesk_skill.utils.security import wrap_field_simple, is_security_enabled
+from zendesk_skill.storage import save_response
+from zendesk_skill.utils.security import is_security_enabled, wrap_field_simple
 
 # Text-based file extensions that should be scanned for prompt injection
 TEXT_EXTENSIONS = {
@@ -48,9 +47,9 @@ async def search_tickets(
     query: str,
     page: int = 1,
     per_page: int = 25,
-    sort_by: Optional[str] = None,
+    sort_by: str | None = None,
     sort_order: str = "desc",
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Search Zendesk tickets.
 
@@ -92,7 +91,7 @@ async def search_tickets(
 
 async def get_ticket(
     ticket_id: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Get a ticket by ID.
 
@@ -125,7 +124,7 @@ async def get_ticket(
 
 async def get_ticket_details(
     ticket_id: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Get ticket with all comments and metadata.
 
@@ -173,7 +172,7 @@ async def get_ticket_details(
 
 async def get_linked_incidents(
     ticket_id: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Get incidents linked to a ticket.
 
@@ -202,8 +201,8 @@ async def get_linked_incidents(
 
 async def download_attachment(
     content_url: str,
-    ticket_id: Optional[str] = None,
-    output_path: Optional[str] = None,
+    ticket_id: str | None = None,
+    output_path: str | None = None,
 ) -> dict:
     """Download an attachment.
 
@@ -292,13 +291,13 @@ async def download_attachment(
 
 async def update_ticket(
     ticket_id: str,
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
-    assignee_id: Optional[str] = None,
-    subject: Optional[str] = None,
-    tags: Optional[list[str]] = None,
-    ticket_type: Optional[str] = None,
-    output_path: Optional[str] = None,
+    status: str | None = None,
+    priority: str | None = None,
+    assignee_id: str | None = None,
+    subject: str | None = None,
+    tags: list[str] | None = None,
+    ticket_type: str | None = None,
+    output_path: str | None = None,
 ) -> dict:
     """Update a ticket's properties.
 
@@ -359,11 +358,11 @@ async def update_ticket(
 async def create_ticket(
     subject: str,
     description: str,
-    priority: Optional[str] = None,
-    status: Optional[str] = None,
-    tags: Optional[list[str]] = None,
-    ticket_type: Optional[str] = None,
-    output_path: Optional[str] = None,
+    priority: str | None = None,
+    status: str | None = None,
+    tags: list[str] | None = None,
+    ticket_type: str | None = None,
+    output_path: str | None = None,
 ) -> dict:
     """Create a new ticket.
 
@@ -413,7 +412,7 @@ async def _add_ticket_comment(
     ticket_id: str,
     body: str,
     public: bool,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Add a comment to a ticket (internal helper).
 
@@ -456,7 +455,7 @@ async def _add_ticket_comment(
 async def add_private_note(
     ticket_id: str,
     note: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Add a private internal note to a ticket.
 
@@ -474,7 +473,7 @@ async def add_private_note(
 async def add_public_comment(
     ticket_id: str,
     comment: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Add a public comment to a ticket.
 
@@ -496,7 +495,7 @@ async def add_public_comment(
 
 async def get_ticket_metrics(
     ticket_id: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Get metrics for a ticket.
 
@@ -541,7 +540,7 @@ async def get_ticket_metrics(
 async def list_ticket_metrics(
     page: int = 1,
     per_page: int = 25,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """List ticket metrics.
 
@@ -569,12 +568,12 @@ async def list_ticket_metrics(
 
 
 async def get_satisfaction_ratings(
-    score: Optional[str] = None,
-    start_time: Optional[str] = None,
-    end_time: Optional[str] = None,
+    score: str | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
     page: int = 1,
     per_page: int = 25,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """List CSAT satisfaction ratings.
 
@@ -613,7 +612,7 @@ async def get_satisfaction_ratings(
 
 async def get_satisfaction_rating(
     rating_id: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Get a single satisfaction rating.
 
@@ -646,8 +645,8 @@ async def get_satisfaction_rating(
 
 
 async def list_views(
-    active: Optional[bool] = None,
-    output_path: Optional[str] = None,
+    active: bool | None = None,
+    output_path: str | None = None,
 ) -> dict:
     """List available views.
 
@@ -678,7 +677,7 @@ async def list_views(
 
 async def get_view_count(
     view_id: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Get ticket count for a view.
 
@@ -709,7 +708,7 @@ async def get_view_tickets(
     view_id: str,
     page: int = 1,
     per_page: int = 25,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Get tickets from a view.
 
@@ -747,7 +746,7 @@ async def get_view_tickets(
 
 async def get_user(
     user_id: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Get a user by ID.
 
@@ -778,7 +777,7 @@ async def get_user(
 
 async def search_users(
     query: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Search users by name or email.
 
@@ -810,7 +809,7 @@ async def search_users(
 
 async def get_organization(
     org_id: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Get an organization by ID.
 
@@ -840,7 +839,7 @@ async def get_organization(
 
 async def search_organizations(
     query: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Search organizations.
 
@@ -873,7 +872,7 @@ async def search_organizations(
 
 
 async def list_groups(
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """List support groups.
 
@@ -898,7 +897,7 @@ async def list_groups(
 
 
 async def list_tags(
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """List popular tags.
 
@@ -923,7 +922,7 @@ async def list_tags(
 
 
 async def list_sla_policies(
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """List SLA policies.
 
@@ -964,7 +963,7 @@ async def list_sla_policies(
 
 
 async def get_current_user(
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> dict:
     """Get current authenticated user (test auth).
 
@@ -1071,14 +1070,7 @@ async def auth_login(
         client = ZendeskClient(email=email, token=token, subdomain=subdomain)
         result = await client.get("users/me.json")
         user = result.get("user", {})
-    except ZendeskAuthError as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "user": None,
-            "config_path": None,
-        }
-    except ZendeskAPIError as e:
+    except (ZendeskAuthError, ZendeskAPIError) as e:
         return {
             "success": False,
             "error": str(e),

@@ -5,7 +5,7 @@ import json
 import sys
 from functools import wraps
 from pathlib import Path
-from typing import Annotated, Callable, Optional
+from typing import Annotated, Callable
 
 import typer
 
@@ -67,7 +67,7 @@ def version_callback(value: bool) -> None:
 @app.callback()
 def main(
     version: Annotated[
-        Optional[bool],
+        bool | None,
         typer.Option(
             "--version", "-v",
             help="Show version and exit.",
@@ -77,7 +77,6 @@ def main(
     ] = None,
 ) -> None:
     """Zendesk CLI - Manage tickets, users, and support metrics."""
-    pass
 
 
 # =============================================================================
@@ -88,15 +87,15 @@ def main(
 @auth_app.command("login")
 def auth_login_cmd(
     email: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--email", "-e", help="Zendesk email address"),
     ] = None,
     token: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--token", "-t", help="Zendesk API token"),
     ] = None,
     subdomain: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--subdomain", "-s", help="Zendesk subdomain (e.g., 'company' for company.zendesk.com)"),
     ] = None,
 ) -> None:
@@ -191,11 +190,11 @@ def auth_logout_cmd() -> None:
 @auth_app.command("login-slack")
 def auth_login_slack_cmd(
     webhook_url: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--webhook", "-w", help="Slack incoming webhook URL"),
     ] = None,
     channel: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--channel", "-c", help="Default Slack channel (e.g., #channel-name)"),
     ] = None,
 ) -> None:
@@ -268,9 +267,9 @@ def search_cmd(
     query: Annotated[str, typer.Argument(help="Zendesk search query")],
     page: Annotated[int, typer.Option("--page", "-p", help="Page number")] = 1,
     per_page: Annotated[int, typer.Option("--per-page", "-n", help="Results per page")] = 25,
-    sort_by: Annotated[Optional[str], typer.Option("--sort", "-s", help="Sort field")] = None,
+    sort_by: Annotated[str | None, typer.Option("--sort", "-s", help="Sort field")] = None,
     sort_order: Annotated[str, typer.Option("--order", "-o", help="Sort order")] = "desc",
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Search Zendesk tickets using query syntax."""
     result = run_async(operations.search_tickets(
@@ -283,7 +282,7 @@ def search_cmd(
 @zendesk_command
 def ticket_cmd(
     ticket_id: Annotated[str, typer.Argument(help="Ticket ID")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Get a ticket by ID."""
     result = run_async(operations.get_ticket(ticket_id, output_path))
@@ -294,7 +293,7 @@ def ticket_cmd(
 @zendesk_command
 def ticket_details_cmd(
     ticket_id: Annotated[str, typer.Argument(help="Ticket ID")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Get ticket with all comments and metadata."""
     result = run_async(operations.get_ticket_details(ticket_id, output_path))
@@ -305,7 +304,7 @@ def ticket_details_cmd(
 @zendesk_command
 def linked_incidents_cmd(
     ticket_id: Annotated[str, typer.Argument(help="Ticket ID")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Get incidents linked to a ticket."""
     result = run_async(operations.get_linked_incidents(ticket_id, output_path))
@@ -316,8 +315,8 @@ def linked_incidents_cmd(
 @zendesk_command
 def attachment_cmd(
     content_url: Annotated[str, typer.Argument(help="Attachment content URL")],
-    ticket_id: Annotated[Optional[str], typer.Option("--ticket", "-t", help="Ticket ID (organizes downloads by ticket)")] = None,
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path (overrides --ticket)")] = None,
+    ticket_id: Annotated[str | None, typer.Option("--ticket", "-t", help="Ticket ID (organizes downloads by ticket)")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path (overrides --ticket)")] = None,
 ) -> None:
     """Download an attachment."""
     result = run_async(operations.download_attachment(content_url, ticket_id, output_path))
@@ -333,13 +332,13 @@ def attachment_cmd(
 @zendesk_command
 def update_ticket_cmd(
     ticket_id: Annotated[str, typer.Argument(help="Ticket ID")],
-    status: Annotated[Optional[str], typer.Option("--status", "-s", help="New status")] = None,
-    priority: Annotated[Optional[str], typer.Option("--priority", "-p", help="New priority")] = None,
-    assignee_id: Annotated[Optional[str], typer.Option("--assignee", "-a", help="Assignee ID")] = None,
-    subject: Annotated[Optional[str], typer.Option("--subject", help="New subject")] = None,
-    tags: Annotated[Optional[str], typer.Option("--tags", "-t", help="Tags (comma-separated)")] = None,
-    ticket_type: Annotated[Optional[str], typer.Option("--type", help="Ticket type")] = None,
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    status: Annotated[str | None, typer.Option("--status", "-s", help="New status")] = None,
+    priority: Annotated[str | None, typer.Option("--priority", "-p", help="New priority")] = None,
+    assignee_id: Annotated[str | None, typer.Option("--assignee", "-a", help="Assignee ID")] = None,
+    subject: Annotated[str | None, typer.Option("--subject", help="New subject")] = None,
+    tags: Annotated[str | None, typer.Option("--tags", "-t", help="Tags (comma-separated)")] = None,
+    ticket_type: Annotated[str | None, typer.Option("--type", help="Ticket type")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Update a ticket's properties."""
     tags_list = [t.strip() for t in tags.split(",")] if tags else None
@@ -354,11 +353,11 @@ def update_ticket_cmd(
 def create_ticket_cmd(
     subject: Annotated[str, typer.Argument(help="Ticket subject")],
     description: Annotated[str, typer.Argument(help="Ticket description")],
-    priority: Annotated[Optional[str], typer.Option("--priority", "-p", help="Priority")] = None,
-    status: Annotated[Optional[str], typer.Option("--status", "-s", help="Status")] = None,
-    tags: Annotated[Optional[str], typer.Option("--tags", "-t", help="Tags (comma-separated)")] = None,
-    ticket_type: Annotated[Optional[str], typer.Option("--type", help="Ticket type")] = None,
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    priority: Annotated[str | None, typer.Option("--priority", "-p", help="Priority")] = None,
+    status: Annotated[str | None, typer.Option("--status", "-s", help="Status")] = None,
+    tags: Annotated[str | None, typer.Option("--tags", "-t", help="Tags (comma-separated)")] = None,
+    ticket_type: Annotated[str | None, typer.Option("--type", help="Ticket type")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Create a new ticket."""
     tags_list = [t.strip() for t in tags.split(",")] if tags else None
@@ -373,7 +372,7 @@ def create_ticket_cmd(
 def add_note_cmd(
     ticket_id: Annotated[str, typer.Argument(help="Ticket ID")],
     note: Annotated[str, typer.Argument(help="Note content")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Add a private internal note to a ticket."""
     result = run_async(operations.add_private_note(ticket_id, note, output_path))
@@ -385,7 +384,7 @@ def add_note_cmd(
 def add_comment_cmd(
     ticket_id: Annotated[str, typer.Argument(help="Ticket ID")],
     comment: Annotated[str, typer.Argument(help="Comment content")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Add a public comment to a ticket."""
     result = run_async(operations.add_public_comment(ticket_id, comment, output_path))
@@ -401,7 +400,7 @@ def add_comment_cmd(
 @zendesk_command
 def ticket_metrics_cmd(
     ticket_id: Annotated[str, typer.Argument(help="Ticket ID")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Get metrics for a ticket."""
     result = run_async(operations.get_ticket_metrics(ticket_id, output_path))
@@ -413,7 +412,7 @@ def ticket_metrics_cmd(
 def list_metrics_cmd(
     page: Annotated[int, typer.Option("--page", "-p", help="Page number")] = 1,
     per_page: Annotated[int, typer.Option("--per-page", "-n", help="Results per page")] = 25,
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """List ticket metrics."""
     result = run_async(operations.list_ticket_metrics(page, per_page, output_path))
@@ -423,12 +422,12 @@ def list_metrics_cmd(
 @app.command("satisfaction-ratings")
 @zendesk_command
 def satisfaction_ratings_cmd(
-    score: Annotated[Optional[str], typer.Option("--score", "-s", help="Filter by score")] = None,
-    start_time: Annotated[Optional[str], typer.Option("--start", help="Start time")] = None,
-    end_time: Annotated[Optional[str], typer.Option("--end", help="End time")] = None,
+    score: Annotated[str | None, typer.Option("--score", "-s", help="Filter by score")] = None,
+    start_time: Annotated[str | None, typer.Option("--start", help="Start time")] = None,
+    end_time: Annotated[str | None, typer.Option("--end", help="End time")] = None,
     page: Annotated[int, typer.Option("--page", "-p", help="Page number")] = 1,
     per_page: Annotated[int, typer.Option("--per-page", "-n", help="Results per page")] = 25,
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """List CSAT satisfaction ratings."""
     result = run_async(operations.get_satisfaction_ratings(
@@ -441,7 +440,7 @@ def satisfaction_ratings_cmd(
 @zendesk_command
 def satisfaction_rating_cmd(
     rating_id: Annotated[str, typer.Argument(help="Rating ID")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Get a single satisfaction rating."""
     result = run_async(operations.get_satisfaction_rating(rating_id, output_path))
@@ -456,8 +455,8 @@ def satisfaction_rating_cmd(
 @app.command("views")
 @zendesk_command
 def views_cmd(
-    active: Annotated[Optional[bool], typer.Option("--active/--all", help="Filter active views")] = None,
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    active: Annotated[bool | None, typer.Option("--active/--all", help="Filter active views")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """List available views."""
     result = run_async(operations.list_views(active, output_path))
@@ -468,7 +467,7 @@ def views_cmd(
 @zendesk_command
 def view_count_cmd(
     view_id: Annotated[str, typer.Argument(help="View ID")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Get ticket count for a view."""
     result = run_async(operations.get_view_count(view_id, output_path))
@@ -481,7 +480,7 @@ def view_tickets_cmd(
     view_id: Annotated[str, typer.Argument(help="View ID")],
     page: Annotated[int, typer.Option("--page", "-p", help="Page number")] = 1,
     per_page: Annotated[int, typer.Option("--per-page", "-n", help="Results per page")] = 25,
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Get tickets from a view."""
     result = run_async(operations.get_view_tickets(view_id, page, per_page, output_path))
@@ -497,7 +496,7 @@ def view_tickets_cmd(
 @zendesk_command
 def user_cmd(
     user_id: Annotated[str, typer.Argument(help="User ID")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Get a user by ID."""
     result = run_async(operations.get_user(user_id, output_path))
@@ -508,7 +507,7 @@ def user_cmd(
 @zendesk_command
 def search_users_cmd(
     query: Annotated[str, typer.Argument(help="Search query")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Search users by name or email."""
     result = run_async(operations.search_users(query, output_path))
@@ -519,7 +518,7 @@ def search_users_cmd(
 @zendesk_command
 def org_cmd(
     org_id: Annotated[str, typer.Argument(help="Organization ID")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Get an organization by ID."""
     result = run_async(operations.get_organization(org_id, output_path))
@@ -530,7 +529,7 @@ def org_cmd(
 @zendesk_command
 def search_orgs_cmd(
     query: Annotated[str, typer.Argument(help="Search query")],
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Search organizations."""
     result = run_async(operations.search_organizations(query, output_path))
@@ -545,7 +544,7 @@ def search_orgs_cmd(
 @app.command("groups")
 @zendesk_command
 def groups_cmd(
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """List support groups."""
     result = run_async(operations.list_groups(output_path))
@@ -555,7 +554,7 @@ def groups_cmd(
 @app.command("tags")
 @zendesk_command
 def tags_cmd(
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """List popular tags."""
     result = run_async(operations.list_tags(output_path))
@@ -565,7 +564,7 @@ def tags_cmd(
 @app.command("sla-policies")
 @zendesk_command
 def sla_policies_cmd(
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """List SLA policies."""
     result = run_async(operations.list_sla_policies(output_path))
@@ -575,7 +574,7 @@ def sla_policies_cmd(
 @app.command("me")
 @zendesk_command
 def me_cmd(
-    output_path: Annotated[Optional[str], typer.Option("--output", help="Output path")] = None,
+    output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
     """Get current authenticated user (test auth)."""
     result = run_async(operations.get_current_user(output_path))
@@ -590,8 +589,8 @@ def me_cmd(
 @app.command("query")
 def query_cmd(
     file_path: Annotated[str, typer.Argument(help="Path to stored JSON file")],
-    query: Annotated[Optional[str], typer.Option("--query", "-q", help="Named query")] = None,
-    custom_jq: Annotated[Optional[str], typer.Option("--jq", help="Custom jq expression")] = None,
+    query: Annotated[str | None, typer.Option("--query", "-q", help="Named query")] = None,
+    custom_jq: Annotated[str | None, typer.Option("--jq", help="Custom jq expression")] = None,
     list_queries: Annotated[bool, typer.Option("--list", "-l", help="List available queries")] = False,
 ) -> None:
     """Query a stored JSON file using jq."""
@@ -666,11 +665,11 @@ def query_cmd(
 @zendesk_command
 def slack_report_cmd(
     analysis_file: Annotated[
-        Optional[str],
+        str | None,
         typer.Argument(help="Path to support_analysis.json file"),
     ] = None,
     channel: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--channel", "-c", help="Override Slack channel"),
     ] = None,
 ) -> None:
@@ -720,11 +719,11 @@ def slack_report_cmd(
 @zendesk_command
 def markdown_report_cmd(
     analysis_file: Annotated[
-        Optional[str],
+        str | None,
         typer.Argument(help="Path to support_analysis.json file"),
     ] = None,
     output_file: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--output", "-o", help="Output file path (prints to stdout if not specified)"),
     ] = None,
 ) -> None:

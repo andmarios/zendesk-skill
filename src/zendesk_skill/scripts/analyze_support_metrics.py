@@ -27,7 +27,7 @@ import subprocess
 import sys
 import tempfile
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from statistics import mean, median
 from zoneinfo import ZoneInfo

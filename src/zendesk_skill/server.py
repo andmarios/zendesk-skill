@@ -1,7 +1,6 @@
 """Zendesk MCP Server - Thin wrapper around operations module."""
 
 import json
-from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,156 +18,152 @@ mcp = FastMCP("zendesk_skill")
 # Pydantic Input Models
 # =============================================================================
 
-# Shared model config
-_MODEL_CONFIG = ConfigDict(str_strip_whitespace=True)
-
-
 class OutputOnlyInput(BaseModel):
     """Base input with only output path."""
-    model_config = _MODEL_CONFIG
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    model_config = ConfigDict(str_strip_whitespace=True)
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class TicketIdInput(BaseModel):
     """Input for single ticket operations."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     ticket_id: str = Field(..., description="The ID of the ticket", min_length=1)
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class ViewIdInput(BaseModel):
     """Input for view operations."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     view_id: str = Field(..., description="View ID", min_length=1)
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class UserIdInput(BaseModel):
     """Input for user operations."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     user_id: str = Field(..., description="User ID", min_length=1)
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class OrgIdInput(BaseModel):
     """Input for organization operations."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     organization_id: str = Field(..., description="Organization ID", min_length=1)
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class RatingIdInput(BaseModel):
     """Input for single rating."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     rating_id: str = Field(..., description="Rating ID", min_length=1)
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class SearchQueryInput(BaseModel):
     """Input for simple search operations (users, orgs)."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     query: str = Field(..., description="Search query", min_length=1)
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class SearchInput(BaseModel):
     """Input for ticket search with pagination."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     query: str = Field(..., description="Search query", min_length=1)
     page: int = Field(default=1, ge=1, description="Page number")
     per_page: int = Field(default=25, ge=1, le=100, description="Results per page")
-    sort_by: Optional[str] = Field(default=None, description="Sort field")
+    sort_by: str | None = Field(default=None, description="Sort field")
     sort_order: str = Field(default="desc", description="Sort order")
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class PaginatedInput(BaseModel):
     """Input for paginated listing operations."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     page: int = Field(default=1, ge=1, description="Page number")
     per_page: int = Field(default=25, ge=1, le=100, description="Results per page")
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class ViewTicketsInput(BaseModel):
     """Input for view tickets with pagination."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     view_id: str = Field(..., description="View ID", min_length=1)
     page: int = Field(default=1, ge=1, description="Page number")
     per_page: int = Field(default=25, ge=1, le=100, description="Results per page")
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class AttachmentInput(BaseModel):
     """Input for attachment download."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     content_url: str = Field(..., description="The attachment content URL")
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class TicketUpdateInput(BaseModel):
     """Input for ticket updates."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     ticket_id: str = Field(..., description="The ticket ID", min_length=1)
-    status: Optional[str] = Field(default=None, description="New status")
-    priority: Optional[str] = Field(default=None, description="New priority")
-    assignee_id: Optional[str] = Field(default=None, description="Assignee ID")
-    subject: Optional[str] = Field(default=None, description="New subject")
-    tags: Optional[list[str]] = Field(default=None, description="Tags to set")
-    type: Optional[str] = Field(default=None, description="Ticket type")
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    status: str | None = Field(default=None, description="New status")
+    priority: str | None = Field(default=None, description="New priority")
+    assignee_id: str | None = Field(default=None, description="Assignee ID")
+    subject: str | None = Field(default=None, description="New subject")
+    tags: list[str] | None = Field(default=None, description="Tags to set")
+    type: str | None = Field(default=None, description="Ticket type")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class TicketCreateInput(BaseModel):
     """Input for ticket creation."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     subject: str = Field(..., description="Ticket subject", min_length=1)
     description: str = Field(..., description="Ticket description", min_length=1)
-    status: Optional[str] = Field(default=None, description="Status")
-    priority: Optional[str] = Field(default=None, description="Priority")
-    tags: Optional[list[str]] = Field(default=None, description="Tags")
-    type: Optional[str] = Field(default=None, description="Ticket type")
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    status: str | None = Field(default=None, description="Status")
+    priority: str | None = Field(default=None, description="Priority")
+    tags: list[str] | None = Field(default=None, description="Tags")
+    type: str | None = Field(default=None, description="Ticket type")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class NoteInput(BaseModel):
     """Input for adding notes to tickets."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     ticket_id: str = Field(..., description="Ticket ID", min_length=1)
     note: str = Field(..., description="Note content", min_length=1)
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class CommentInput(BaseModel):
     """Input for adding comments to tickets."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     ticket_id: str = Field(..., description="Ticket ID", min_length=1)
     comment: str = Field(..., description="Comment content", min_length=1)
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class QueryStoredInput(BaseModel):
     """Input for querying stored files."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     file_path: str = Field(..., description="Path to stored JSON file")
-    query: Optional[str] = Field(default=None, description="Named query")
-    custom_jq: Optional[str] = Field(default=None, description="Custom jq expression")
+    query: str | None = Field(default=None, description="Named query")
+    custom_jq: str | None = Field(default=None, description="Custom jq expression")
 
 
 class SatisfactionRatingsInput(BaseModel):
     """Input for satisfaction ratings query."""
-    model_config = _MODEL_CONFIG
-    score: Optional[str] = Field(default=None, description="Filter by score")
-    start_time: Optional[str] = Field(default=None, description="Start time")
-    end_time: Optional[str] = Field(default=None, description="End time")
+    model_config = ConfigDict(str_strip_whitespace=True)
+    score: str | None = Field(default=None, description="Filter by score")
+    start_time: str | None = Field(default=None, description="Start time")
+    end_time: str | None = Field(default=None, description="End time")
     page: int = Field(default=1, ge=1, description="Page number")
     per_page: int = Field(default=25, ge=1, le=100, description="Results per page")
-    output_path: Optional[str] = Field(default=None, description="Custom output path")
+    output_path: str | None = Field(default=None, description="Custom output path")
 
 
 class AuthStatusInput(BaseModel):
     """Input for auth status check."""
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(str_strip_whitespace=True)
     validate_credentials: bool = Field(
         default=True,
         description="Whether to validate credentials by making an API call"
@@ -189,10 +184,9 @@ def _handle_error(e: Exception) -> str:
     """Format errors consistently."""
     if isinstance(e, ZendeskAuthError):
         return f"**Authentication Error:** {e}"
-    elif isinstance(e, ZendeskAPIError):
+    if isinstance(e, ZendeskAPIError):
         return f"**API Error:** {e}"
-    else:
-        return f"**Error:** {type(e).__name__}: {e}"
+    return f"**Error:** {type(e).__name__}: {e}"
 
 
 # =============================================================================
@@ -330,10 +324,7 @@ async def zendesk_query_stored(params: QueryStoredInput) -> str:
             return "**Error:** Either query or custom_jq must be provided"
 
         success, result = execute_jq(params.file_path, jq_query)
-        if success:
-            return result
-        else:
-            return f"**Error:** {result}"
+        return result if success else f"**Error:** {result}"
 
     except FileNotFoundError:
         return f"**Error:** File not found: {params.file_path}"

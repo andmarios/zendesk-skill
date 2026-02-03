@@ -4,7 +4,7 @@ import base64
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -21,19 +21,15 @@ MAX_REDIRECTS = 5
 class ZendeskClientError(Exception):
     """Base exception for Zendesk client errors."""
 
-    pass
-
 
 class ZendeskAuthError(ZendeskClientError):
     """Authentication error."""
-
-    pass
 
 
 class ZendeskAPIError(ZendeskClientError):
     """API request error."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None):
+    def __init__(self, message: str, status_code: int | None = None):
         super().__init__(message)
         self.status_code = status_code
 
@@ -380,9 +376,9 @@ class ZendeskClient:
 
     def __init__(
         self,
-        email: Optional[str] = None,
-        token: Optional[str] = None,
-        subdomain: Optional[str] = None,
+        email: str | None = None,
+        token: str | None = None,
+        subdomain: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
     ):
         """Initialize the client.
@@ -413,9 +409,9 @@ class ZendeskClient:
         self,
         method: str,
         endpoint: str,
-        params: Optional[dict[str, Any]] = None,
-        json_data: Optional[dict[str, Any]] = None,
-        timeout: Optional[float] = None,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         """Make an API request to Zendesk.
 
@@ -491,8 +487,8 @@ class ZendeskClient:
     async def get(
         self,
         endpoint: str,
-        params: Optional[dict[str, Any]] = None,
-        timeout: Optional[float] = None,
+        params: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         """Make a GET request."""
         return await self.request("GET", endpoint, params=params, timeout=timeout)
@@ -500,8 +496,8 @@ class ZendeskClient:
     async def post(
         self,
         endpoint: str,
-        json_data: Optional[dict[str, Any]] = None,
-        timeout: Optional[float] = None,
+        json_data: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         """Make a POST request."""
         return await self.request("POST", endpoint, json_data=json_data, timeout=timeout)
@@ -509,8 +505,8 @@ class ZendeskClient:
     async def put(
         self,
         endpoint: str,
-        json_data: Optional[dict[str, Any]] = None,
-        timeout: Optional[float] = None,
+        json_data: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         """Make a PUT request."""
         return await self.request("PUT", endpoint, json_data=json_data, timeout=timeout)
@@ -518,7 +514,7 @@ class ZendeskClient:
     async def delete(
         self,
         endpoint: str,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         """Make a DELETE request."""
         return await self.request("DELETE", endpoint, timeout=timeout)
@@ -527,7 +523,7 @@ class ZendeskClient:
         self,
         url: str,
         output_path: Path,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> Path:
         """Download a file (e.g., attachment) following redirects.
 
@@ -573,7 +569,7 @@ class ZendeskClient:
 
 
 # Module-level singleton for convenience
-_client: Optional[ZendeskClient] = None
+_client: ZendeskClient | None = None
 
 
 def get_client() -> ZendeskClient:

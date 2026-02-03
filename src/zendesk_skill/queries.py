@@ -6,7 +6,6 @@ Each tool has predefined useful queries that can be executed via zendesk_query_s
 import json
 import subprocess
 from pathlib import Path
-from typing import Any
 
 # Named queries organized by tool/response type
 QUERIES: dict[str, dict[str, dict[str, str]]] = {
@@ -342,24 +341,19 @@ def execute_jq(file_path: str, jq_query: str) -> tuple[bool, str]:
     Returns:
         Tuple of (success, result_or_error)
     """
-    # Validate file exists
     if not Path(file_path).exists():
         return False, f"File not found: {file_path}"
 
     try:
-        # Run jq subprocess
         result = subprocess.run(
             ["jq", jq_query, file_path],
             capture_output=True,
             text=True,
             timeout=30,
         )
-
         if result.returncode == 0:
             return True, result.stdout.strip()
-        else:
-            return False, f"jq error: {result.stderr.strip()}"
-
+        return False, f"jq error: {result.stderr.strip()}"
     except FileNotFoundError:
         return False, "jq is not installed. Please install jq to use query functionality."
     except subprocess.TimeoutExpired:

@@ -6,13 +6,13 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Default storage directory (cross-platform)
 DEFAULT_STORAGE_DIR = Path(tempfile.gettempdir()) / "zendesk-skill"
 
 
-def _get_storage_dir(ticket_id: Optional[str] = None) -> Path:
+def _get_storage_dir(ticket_id: str | None = None) -> Path:
     """Get and ensure storage directory exists.
 
     Args:
@@ -54,38 +54,34 @@ def _extract_type_description(value: Any, max_depth: int = 3, current_depth: int
 
     if value is None:
         return "null"
-    elif isinstance(value, bool):
+    if isinstance(value, bool):
         return "boolean"
-    elif isinstance(value, int):
+    if isinstance(value, int):
         return "integer"
-    elif isinstance(value, float):
+    if isinstance(value, float):
         return "number"
-    elif isinstance(value, str):
-        # Detect special string types
-        if value.startswith("http://") or value.startswith("https://"):
+    if isinstance(value, str):
+        if value.startswith(("http://", "https://")):
             return "url"
-        elif "@" in value and "." in value:
+        if "@" in value and "." in value:
             return "email"
-        elif len(value) == 10 and value.count("-") == 2:
+        if len(value) == 10 and value.count("-") == 2:
             return "date (YYYY-MM-DD)"
-        elif "T" in value and ("Z" in value or "+" in value):
+        if "T" in value and ("Z" in value or "+" in value):
             return "datetime (ISO 8601)"
-        elif len(value) > 100:
+        if len(value) > 100:
             return "long string"
-        else:
-            return "string"
-    elif isinstance(value, list):
+        return "string"
+    if isinstance(value, list):
         if not value:
             return "array (empty)"
-        # Sample first item
         item_type = _extract_type_description(value[0], max_depth, current_depth + 1)
         return f"array[{item_type}] ({len(value)} items)"
-    elif isinstance(value, dict):
+    if isinstance(value, dict):
         if not value:
             return "object (empty)"
         return "object"
-    else:
-        return type(value).__name__
+    return type(value).__name__
 
 
 def _extract_structure(
@@ -153,9 +149,9 @@ def save_response(
     tool_name: str,
     params: dict[str, Any],
     data: Any,
-    suggested_queries: Optional[list[dict[str, str]]] = None,
-    output_path: Optional[str] = None,
-    ticket_id: Optional[str] = None,
+    suggested_queries: list[dict[str, str]] | None = None,
+    output_path: str | None = None,
+    ticket_id: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Save an API response to a local file with metadata.
 
