@@ -4,6 +4,9 @@ Security wrapping is enabled by default. To disable, add to
 ~/.claude/.zendesk-skill/config.json:
 
     {"security_enabled": false}
+
+To allowlist specific tickets:
+    {"allowlisted_tickets": ["12345", "67890"]}
 """
 
 import json
@@ -63,6 +66,22 @@ def is_security_enabled() -> bool:
     return config.get("security_enabled", True)  # Default: enabled
 
 
+def is_allowlisted(source_type: str, source_id: str) -> bool:
+    """Check if a source is in the zendesk allowlist.
+
+    Args:
+        source_type: Type of source ("ticket", "comment", etc.)
+        source_id: Unique identifier for the source
+
+    Returns:
+        True if allowlisted, False otherwise
+    """
+    config = _load_zendesk_config()
+    if source_type in ("ticket", "zendesk", "comment"):
+        return source_id in config.get("allowlisted_tickets", [])
+    return False
+
+
 def wrap_field_simple(
     content: str | None,
     source_type: str,
@@ -71,6 +90,7 @@ def wrap_field_simple(
     """Wrap a field with security markers, returning simplified output for MCP tools.
 
     If security is disabled in zendesk config, returns content unchanged.
+    If source is allowlisted, returns content unchanged.
 
     Args:
         content: The content to wrap (returns None if None)
@@ -87,11 +107,11 @@ def wrap_field_simple(
     if not is_security_enabled():
         return content
 
-    security_config = load_config()
-
-    # Check allowlist
-    if security_config.is_allowlisted(source_type, source_id):
+    # Check zendesk allowlist
+    if is_allowlisted(source_type, source_id):
         return content  # Return unwrapped
+
+    security_config = load_config()
 
     return wrap_untrusted_content(
         content,
