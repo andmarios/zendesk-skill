@@ -338,6 +338,14 @@ wheels = [
 ]
 
 [[package]]
+name = "prompt-security-utils"
+version = "0.1.0"
+source = { git = "https://github.com/andmarios/prompt-security-utils#02326a22cceb74e7d08f0c61f06383c78920e989" }
+dependencies = [
+    { name = "httpx" },
+]
+
+[[package]]
 name = "pycparser"
 version = "3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -731,6 +739,7 @@ source = { editable = "." }
 dependencies = [
     { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
+    { name = "prompt-security-utils" },
     { name = "pydantic" },
     { name = "rich" },
     { name = "typer" },
@@ -746,6 +755,7 @@ dev = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.6.0" },
+    { name = "prompt-security-utils", git = "https://github.com/andmarios/prompt-security-utils" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.9.0" },

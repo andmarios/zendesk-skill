@@ -23,6 +23,7 @@ from zendesk_skill.client import (
 )
 from zendesk_skill.storage import save_response
 from zendesk_skill.queries import get_queries_for_tool
+from zendesk_skill.utils.security import wrap_field_simple
 
 
 def _get_client() -> ZendeskClient:
@@ -104,9 +105,10 @@ async def get_ticket(
     )
 
     ticket = result.get("ticket", {})
+    ticket_id_str = str(ticket.get("id", ticket_id))
     return {
         "id": ticket.get("id"),
-        "subject": ticket.get("subject"),
+        "subject": wrap_field_simple(ticket.get("subject"), "ticket", ticket_id_str),
         "status": ticket.get("status"),
         "priority": ticket.get("priority"),
         "file_path": str(file_path),
@@ -150,9 +152,10 @@ async def get_ticket_details(
     )
 
     ticket = combined["ticket"]
+    ticket_id_str = str(ticket.get("id", ticket_id))
     return {
         "id": ticket.get("id"),
-        "subject": ticket.get("subject"),
+        "subject": wrap_field_simple(ticket.get("subject"), "ticket", ticket_id_str),
         "status": ticket.get("status"),
         "comment_count": len(combined["comments"]),
         "file_path": str(file_path),

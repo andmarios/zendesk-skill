@@ -10,7 +10,11 @@ dependencies = [
     "httpx>=0.27.0",
     "pydantic>=2.0.0",
     "mcp[cli]>=1.6.0",
+    "prompt-security-utils",
 ]
+
+[tool.uv.sources]
+prompt-security-utils = { git = "https://github.com/andmarios/prompt-security-utils" }
 
 [project.scripts]
 zendesk = "zendesk_skill.cli:main_cli"
