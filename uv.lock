@@ -779,7 +779,7 @@ wheels = [
 [[package]]
 name = "prompt-security-utils"
 version = "0.1.0"
-source = { git = "https://github.com/andmarios/prompt-security-utils#1a6abb97756f54059e3125c07ef98859f751f8be" }
+source = { git = "https://github.com/andmarios/prompt-security-utils#ad17a7aa46928d2c4364cbe190950b3ef09e86d6" }
 dependencies = [
     { name = "fastembed" },
     { name = "httpx" },
