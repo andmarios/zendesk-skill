@@ -11,6 +11,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "mcp[cli]>=1.6.0",
     "prompt-security-utils",
+    "mistune>=3.0.0",
 ]
 
 [tool.uv.sources]

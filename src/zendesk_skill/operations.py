@@ -20,6 +20,7 @@ from zendesk_skill.client import (
     save_credentials,
     save_slack_config,
 )
+from zendesk_skill.formatting import format_for_zendesk
 from zendesk_skill.queries import get_queries_for_tool
 from zendesk_skill.storage import save_response
 from zendesk_skill.utils.security import is_security_enabled, wrap_field_simple
@@ -363,17 +364,19 @@ async def create_ticket(
     tags: list[str] | None = None,
     ticket_type: str | None = None,
     output_path: str | None = None,
+    plain_text: bool = False,
 ) -> dict:
     """Create a new ticket.
 
     Args:
         subject: Ticket subject
-        description: Ticket description/first comment
+        description: Ticket description/first comment (Markdown by default)
         priority: Priority level
         status: Initial status
         tags: Tags to add
         ticket_type: Ticket type
         output_path: Custom output file path
+        plain_text: If True, treat description as plain text instead of Markdown
 
     Returns:
         Dict with created status, id, subject, and file_path
@@ -382,7 +385,7 @@ async def create_ticket(
 
     ticket_data: dict = {
         "subject": subject,
-        "comment": {"body": description},
+        "comment": format_for_zendesk(description, plain_text=plain_text),
     }
     if priority:
         ticket_data["priority"] = priority
@@ -413,28 +416,32 @@ async def _add_ticket_comment(
     body: str,
     public: bool,
     output_path: str | None = None,
+    plain_text: bool = False,
 ) -> dict:
     """Add a comment to a ticket (internal helper).
 
     Args:
         ticket_id: The ticket ID
-        body: Comment content
+        body: Comment content (Markdown by default)
         public: Whether the comment is public
         output_path: Custom output file path
+        plain_text: If True, treat body as plain text instead of Markdown
 
     Returns:
         Dict with added status, ticket_id, public flag, and file_path
     """
     client = _get_client()
 
+    comment_data = {
+        **format_for_zendesk(body, plain_text=plain_text),
+        "public": public,
+    }
+
     result = await client.put(
         f"tickets/{ticket_id}.json",
         json_data={
             "ticket": {
-                "comment": {
-                    "body": body,
-                    "public": public,
-                }
+                "comment": comment_data,
             }
         }
     )
@@ -456,36 +463,44 @@ async def add_private_note(
     ticket_id: str,
     note: str,
     output_path: str | None = None,
+    plain_text: bool = False,
 ) -> dict:
     """Add a private internal note to a ticket.
 
     Args:
         ticket_id: The ticket ID
-        note: Note content
+        note: Note content (Markdown by default)
         output_path: Custom output file path
+        plain_text: If True, treat note as plain text instead of Markdown
 
     Returns:
         Dict with added status, ticket_id, public flag, and file_path
     """
-    return await _add_ticket_comment(ticket_id, note, public=False, output_path=output_path)
+    return await _add_ticket_comment(
+        ticket_id, note, public=False, output_path=output_path, plain_text=plain_text,
+    )
 
 
 async def add_public_comment(
     ticket_id: str,
     comment: str,
     output_path: str | None = None,
+    plain_text: bool = False,
 ) -> dict:
     """Add a public comment to a ticket.
 
     Args:
         ticket_id: The ticket ID
-        comment: Comment content
+        comment: Comment content (Markdown by default)
         output_path: Custom output file path
+        plain_text: If True, treat comment as plain text instead of Markdown
 
     Returns:
         Dict with added status, ticket_id, public flag, and file_path
     """
-    return await _add_ticket_comment(ticket_id, comment, public=True, output_path=output_path)
+    return await _add_ticket_comment(
+        ticket_id, comment, public=True, output_path=output_path, plain_text=plain_text,
+    )
 
 
 # =============================================================================

@@ -118,11 +118,12 @@ class TicketCreateInput(BaseModel):
     """Input for ticket creation."""
     model_config = ConfigDict(str_strip_whitespace=True)
     subject: str = Field(..., description="Ticket subject", min_length=1)
-    description: str = Field(..., description="Ticket description", min_length=1)
+    description: str = Field(..., description="Ticket description (Markdown supported)", min_length=1)
     status: str | None = Field(default=None, description="Status")
     priority: str | None = Field(default=None, description="Priority")
     tags: list[str] | None = Field(default=None, description="Tags")
     type: str | None = Field(default=None, description="Ticket type")
+    plain_text: bool = Field(default=False, description="Send as plain text instead of Markdown")
     output_path: str | None = Field(default=None, description="Custom output path")
 
 
@@ -130,7 +131,8 @@ class NoteInput(BaseModel):
     """Input for adding notes to tickets."""
     model_config = ConfigDict(str_strip_whitespace=True)
     ticket_id: str = Field(..., description="Ticket ID", min_length=1)
-    note: str = Field(..., description="Note content", min_length=1)
+    note: str = Field(..., description="Note content (Markdown supported)", min_length=1)
+    plain_text: bool = Field(default=False, description="Send as plain text instead of Markdown")
     output_path: str | None = Field(default=None, description="Custom output path")
 
 
@@ -138,7 +140,8 @@ class CommentInput(BaseModel):
     """Input for adding comments to tickets."""
     model_config = ConfigDict(str_strip_whitespace=True)
     ticket_id: str = Field(..., description="Ticket ID", min_length=1)
-    comment: str = Field(..., description="Comment content", min_length=1)
+    comment: str = Field(..., description="Comment content (Markdown supported)", min_length=1)
+    plain_text: bool = Field(default=False, description="Send as plain text instead of Markdown")
     output_path: str | None = Field(default=None, description="Custom output path")
 
 
@@ -268,11 +271,12 @@ async def zendesk_update_ticket(params: TicketUpdateInput) -> str:
 
 @mcp.tool(name="zendesk_create_ticket")
 async def zendesk_create_ticket(params: TicketCreateInput) -> str:
-    """Create a new Zendesk ticket."""
+    """Create a new Zendesk ticket. Description supports Markdown formatting by default."""
     try:
         result = await operations.create_ticket(
             params.subject, params.description, params.priority,
-            params.status, params.tags, params.type, params.output_path
+            params.status, params.tags, params.type, params.output_path,
+            plain_text=params.plain_text,
         )
         return _format_result(result)
     except Exception as e:
@@ -281,10 +285,11 @@ async def zendesk_create_ticket(params: TicketCreateInput) -> str:
 
 @mcp.tool(name="zendesk_add_private_note")
 async def zendesk_add_private_note(params: NoteInput) -> str:
-    """Add a private internal note to a Zendesk ticket."""
+    """Add a private internal note to a Zendesk ticket. Supports Markdown formatting by default."""
     try:
         result = await operations.add_private_note(
-            params.ticket_id, params.note, params.output_path
+            params.ticket_id, params.note, params.output_path,
+            plain_text=params.plain_text,
         )
         return _format_result(result)
     except Exception as e:
@@ -293,10 +298,11 @@ async def zendesk_add_private_note(params: NoteInput) -> str:
 
 @mcp.tool(name="zendesk_add_public_note")
 async def zendesk_add_public_note(params: CommentInput) -> str:
-    """Add a public comment to a Zendesk ticket."""
+    """Add a public comment to a Zendesk ticket. Supports Markdown formatting by default."""
     try:
         result = await operations.add_public_comment(
-            params.ticket_id, params.comment, params.output_path
+            params.ticket_id, params.comment, params.output_path,
+            plain_text=params.plain_text,
         )
         return _format_result(result)
     except Exception as e:

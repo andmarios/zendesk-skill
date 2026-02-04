@@ -256,9 +256,9 @@ The server exposes 26 tools including:
 | `zendesk_get_ticket` | Get ticket by ID |
 | `zendesk_get_ticket_details` | Get ticket with all comments |
 | `zendesk_update_ticket` | Update ticket properties |
-| `zendesk_create_ticket` | Create new ticket |
-| `zendesk_add_private_note` | Add internal note |
-| `zendesk_add_public_note` | Add public comment |
+| `zendesk_create_ticket` | Create new ticket (Markdown supported) |
+| `zendesk_add_private_note` | Add internal note (Markdown supported) |
+| `zendesk_add_public_note` | Add public comment (Markdown supported) |
 | `zendesk_get_user` | Get user details |
 | `zendesk_search_users` | Search users |
 | `zendesk_get_organization` | Get organization details |
@@ -309,10 +309,13 @@ uv run zendesk attachment --ticket 12345 "https://..."
 - `zendesk attachment` - Download attachment (supports `--ticket` for organization)
 
 ### Write Operations
+
+All write commands support **Markdown formatting** by default (converted to HTML via `html_body`). Use `--plain-text` to send as plain text instead.
+
 - `zendesk update-ticket` - Update ticket properties
-- `zendesk create-ticket` - Create new ticket
-- `zendesk add-note` - Add internal note
-- `zendesk add-comment` - Add public comment
+- `zendesk create-ticket` - Create new ticket (Markdown supported)
+- `zendesk add-note` - Add internal note (Markdown supported)
+- `zendesk add-comment` - Add public comment (Markdown supported)
 
 ### Metrics & Analytics
 - `zendesk ticket-metrics` - Get ticket metrics

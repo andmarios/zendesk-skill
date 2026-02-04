@@ -365,3 +365,149 @@ def test_mcp_auth_tool_exists():
     # Get tool names
     tool_names = list(mcp._tool_manager._tools.keys())
     assert "zendesk_auth_status" in tool_names
+
+
+# =============================================================================
+# Formatting Tests
+# =============================================================================
+
+
+def test_markdown_to_html_bold():
+    """Test bold Markdown conversion."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    result = markdown_to_html("**bold text**")
+    assert "<strong>bold text</strong>" in result
+
+
+def test_markdown_to_html_italic():
+    """Test italic Markdown conversion."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    result = markdown_to_html("*italic text*")
+    assert "<em>italic text</em>" in result
+
+
+def test_markdown_to_html_headers():
+    """Test header Markdown conversion."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    result = markdown_to_html("# Header 1\n## Header 2")
+    assert "<h1>" in result
+    assert "<h2>" in result
+
+
+def test_markdown_to_html_list():
+    """Test list Markdown conversion."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    result = markdown_to_html("- item 1\n- item 2\n- item 3")
+    assert "<ul>" in result
+    assert "<li>" in result
+
+
+def test_markdown_to_html_code_block():
+    """Test code block Markdown conversion."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    result = markdown_to_html("```\ncode here\n```")
+    assert "<code>" in result
+
+
+def test_markdown_to_html_links():
+    """Test link Markdown conversion."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    result = markdown_to_html("[link text](https://example.com)")
+    assert '<a href="https://example.com">' in result
+    assert "link text" in result
+
+
+def test_markdown_to_html_passthrough():
+    """Test that content starting with an HTML tag is passed through unchanged."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    html_content = "<p>Already <strong>HTML</strong></p>"
+    result = markdown_to_html(html_content)
+    assert result == html_content
+
+
+def test_markdown_to_html_no_false_passthrough():
+    """Test that Markdown mentioning HTML tags is NOT treated as HTML."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    # Markdown that mentions HTML tags in code spans or text
+    md = "Use `<strong>` for **bold** and `<em>` for *italic*"
+    result = markdown_to_html(md)
+    # Should be converted, not passed through
+    assert "<strong>" in result  # from **bold**
+    assert "<em>" in result  # from *italic*
+
+
+def test_markdown_to_html_empty():
+    """Test empty content returns empty string."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    assert markdown_to_html("") == ""
+
+
+def test_plain_text_to_html():
+    """Test plain text wrapping with HTML escaping."""
+    from zendesk_skill.formatting import plain_text_to_html
+
+    result = plain_text_to_html("Hello <world> & friends")
+    assert "<p>" in result
+    assert "&lt;world&gt;" in result
+    assert "&amp;" in result
+
+
+def test_plain_text_to_html_newlines():
+    """Test plain text newline handling."""
+    from zendesk_skill.formatting import plain_text_to_html
+
+    result = plain_text_to_html("line 1\nline 2")
+    assert "<br>" in result
+
+
+def test_plain_text_to_html_paragraphs():
+    """Test plain text paragraph separation."""
+    from zendesk_skill.formatting import plain_text_to_html
+
+    result = plain_text_to_html("para 1\n\npara 2")
+    assert result.count("<p>") == 2
+
+
+def test_plain_text_to_html_empty():
+    """Test empty plain text returns empty string."""
+    from zendesk_skill.formatting import plain_text_to_html
+
+    assert plain_text_to_html("") == ""
+
+
+def test_format_for_zendesk_returns_html_body():
+    """Test that format_for_zendesk returns dict with html_body key."""
+    from zendesk_skill.formatting import format_for_zendesk
+
+    result = format_for_zendesk("**bold**")
+    assert "html_body" in result
+    assert "body" not in result
+    assert "<strong>bold</strong>" in result["html_body"]
+
+
+def test_format_for_zendesk_plain_text():
+    """Test format_for_zendesk with plain_text=True."""
+    from zendesk_skill.formatting import format_for_zendesk
+
+    result = format_for_zendesk("Hello <world>", plain_text=True)
+    assert "html_body" in result
+    assert "&lt;world&gt;" in result["html_body"]
+
+
+def test_format_for_zendesk_size_limit():
+    """Test that format_for_zendesk raises ValueError for oversized content."""
+    from zendesk_skill.formatting import format_for_zendesk
+
+    # Create content that exceeds 64KB after conversion
+    huge_content = "x" * 70000
+    with pytest.raises(ValueError, match="64KB limit"):
+        format_for_zendesk(huge_content)

@@ -352,17 +352,19 @@ def update_ticket_cmd(
 @zendesk_command
 def create_ticket_cmd(
     subject: Annotated[str, typer.Argument(help="Ticket subject")],
-    description: Annotated[str, typer.Argument(help="Ticket description")],
+    description: Annotated[str, typer.Argument(help="Ticket description (Markdown supported)")],
     priority: Annotated[str | None, typer.Option("--priority", "-p", help="Priority")] = None,
     status: Annotated[str | None, typer.Option("--status", "-s", help="Status")] = None,
     tags: Annotated[str | None, typer.Option("--tags", "-t", help="Tags (comma-separated)")] = None,
     ticket_type: Annotated[str | None, typer.Option("--type", help="Ticket type")] = None,
+    plain_text: Annotated[bool, typer.Option("--plain-text", help="Send as plain text instead of Markdown")] = False,
     output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
-    """Create a new ticket."""
+    """Create a new ticket. Description supports Markdown formatting by default."""
     tags_list = [t.strip() for t in tags.split(",")] if tags else None
     result = run_async(operations.create_ticket(
-        subject, description, priority, status, tags_list, ticket_type, output_path
+        subject, description, priority, status, tags_list, ticket_type, output_path,
+        plain_text=plain_text,
     ))
     output_json(result)
 
@@ -371,11 +373,14 @@ def create_ticket_cmd(
 @zendesk_command
 def add_note_cmd(
     ticket_id: Annotated[str, typer.Argument(help="Ticket ID")],
-    note: Annotated[str, typer.Argument(help="Note content")],
+    note: Annotated[str, typer.Argument(help="Note content (Markdown supported)")],
+    plain_text: Annotated[bool, typer.Option("--plain-text", help="Send as plain text instead of Markdown")] = False,
     output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
-    """Add a private internal note to a ticket."""
-    result = run_async(operations.add_private_note(ticket_id, note, output_path))
+    """Add a private internal note to a ticket. Supports Markdown formatting by default."""
+    result = run_async(operations.add_private_note(
+        ticket_id, note, output_path, plain_text=plain_text,
+    ))
     output_json(result)
 
 
@@ -383,11 +388,14 @@ def add_note_cmd(
 @zendesk_command
 def add_comment_cmd(
     ticket_id: Annotated[str, typer.Argument(help="Ticket ID")],
-    comment: Annotated[str, typer.Argument(help="Comment content")],
+    comment: Annotated[str, typer.Argument(help="Comment content (Markdown supported)")],
+    plain_text: Annotated[bool, typer.Option("--plain-text", help="Send as plain text instead of Markdown")] = False,
     output_path: Annotated[str | None, typer.Option("--output", help="Output path")] = None,
 ) -> None:
-    """Add a public comment to a ticket."""
-    result = run_async(operations.add_public_comment(ticket_id, comment, output_path))
+    """Add a public comment to a ticket. Supports Markdown formatting by default."""
+    result = run_async(operations.add_public_comment(
+        ticket_id, comment, output_path, plain_text=plain_text,
+    ))
     output_json(result)
 
 

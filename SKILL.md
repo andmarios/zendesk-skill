@@ -69,12 +69,14 @@ Zendesk API responses can be very large (comments with HTML, many custom fields)
 
 ### Write Operations
 
+All write commands (`create-ticket`, `add-note`, `add-comment`) support **Markdown formatting** by default. Content is converted to HTML for reliable rendering in Zendesk Agent Workspace. Use `--plain-text` to send as plain text instead.
+
 | Command | Description | Example |
 |---------|-------------|---------|
 | `update-ticket` | Update ticket properties | `uv run zendesk update-ticket 12345 --status pending` |
-| `create-ticket` | Create new ticket | `uv run zendesk create-ticket "Subject" "Description"` |
-| `add-note` | Add internal note (agents only) | `uv run zendesk add-note 12345 "Internal note"` |
-| `add-comment` | Add public comment | `uv run zendesk add-comment 12345 "Customer reply"` |
+| `create-ticket` | Create new ticket (Markdown) | `uv run zendesk create-ticket "Subject" "**Bold** description"` |
+| `add-note` | Add internal note (Markdown) | `uv run zendesk add-note 12345 "**Investigation:** found the issue"` |
+| `add-comment` | Add public comment (Markdown) | `uv run zendesk add-comment 12345 "Here are the steps:\n- Step 1\n- Step 2"` |
 
 ### Metrics & Analytics
 
@@ -295,8 +297,11 @@ uv run zendesk ticket-details <ticket_id>
 # Change status and add tag
 uv run zendesk update-ticket 12345 --status pending --tags "waiting-customer,tier2"
 
-# Add internal note
-uv run zendesk add-note 12345 "Escalated to tier 2, waiting for response"
+# Add internal note with Markdown formatting
+uv run zendesk add-note 12345 "**Escalated** to tier 2, waiting for response.\n\n- Root cause: config mismatch\n- Next steps: awaiting customer confirmation"
+
+# Add plain text note (no Markdown conversion)
+uv run zendesk add-note 12345 "Simple plain text note" --plain-text
 ```
 
 ## Command Options

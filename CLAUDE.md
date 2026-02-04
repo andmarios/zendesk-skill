@@ -19,6 +19,7 @@ zendesk-skill/
 │       ├── __init__.py      # Package init with version
 │       ├── cli.py           # Typer CLI with 25 commands
 │       ├── client.py        # Zendesk API client (httpx-based)
+│       ├── formatting.py    # Markdown-to-HTML for write operations
 │       ├── storage.py       # Response storage + structure extraction
 │       └── queries.py       # jq query definitions
 └── tests/
@@ -126,6 +127,7 @@ def command_name(
 - `rich>=13.0.0` - Pretty terminal output
 - `httpx>=0.27.0` - Async HTTP client
 - `pydantic>=2.0.0` - Input validation
+- `mistune>=3.0.0` - Markdown-to-HTML conversion for write operations
 
 ## External Requirements
 
