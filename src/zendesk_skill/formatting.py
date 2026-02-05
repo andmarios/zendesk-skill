@@ -12,6 +12,10 @@ import mistune
 # Zendesk's maximum content size for comments
 MAX_CONTENT_SIZE = 65536  # 64KB
 
+# Markdown renderer with hard_wrap enabled - converts single newlines to <br>
+# This matches user expectations in a support context (WYSIWYG behavior)
+_md = mistune.create_markdown(hard_wrap=True)
+
 # Pattern to detect content that's already HTML: must start with an HTML tag
 # (after optional whitespace). This avoids false positives from Markdown that
 # merely *mentions* HTML tags in code spans or text.
@@ -40,7 +44,7 @@ def markdown_to_html(content: str) -> str:
     if _HTML_START_PATTERN.match(content):
         return content
 
-    return mistune.html(content)
+    return _md(content)
 
 
 def plain_text_to_html(content: str) -> str:
