@@ -24,6 +24,25 @@ _HTML_START_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Zendesk Agent Workspace renders H1/H2 disproportionately large in ticket
+# replies. Shift all heading levels down by 1 (H1→H2, H2→H3, etc.) so that
+# section headers look proportionate. Zendesk supports H1–H4 only.
+_HEADING_SHIFT = 1
+_MAX_HEADING = 4
+
+
+def _downgrade_headings(html_content: str) -> str:
+    """Shift heading levels down and add spacing for Zendesk rendering."""
+
+    def _replace(match: re.Match) -> str:
+        slash = match.group(1)
+        level = min(int(match.group(2)) + _HEADING_SHIFT, _MAX_HEADING)
+        if slash:
+            return f"</h{level}>"
+        return f'<h{level} style="margin-bottom:0.4em;">'
+
+    return re.sub(r"<(/?)h([1-6])>", _replace, html_content)
+
 
 def markdown_to_html(content: str) -> str:
     """Convert Markdown content to HTML.
@@ -44,7 +63,7 @@ def markdown_to_html(content: str) -> str:
     if _HTML_START_PATTERN.match(content):
         return content
 
-    return _md(content)
+    return _downgrade_headings(_md(content))
 
 
 def plain_text_to_html(content: str) -> str:

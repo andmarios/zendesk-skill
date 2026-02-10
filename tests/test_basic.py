@@ -389,12 +389,14 @@ def test_markdown_to_html_italic():
 
 
 def test_markdown_to_html_headers():
-    """Test header Markdown conversion."""
+    """Test header conversion (headings shifted down by 1 for Zendesk)."""
     from zendesk_skill.formatting import markdown_to_html
 
     result = markdown_to_html("# Header 1\n## Header 2")
-    assert "<h1>" in result
-    assert "<h2>" in result
+    assert "<h2 " in result  # H1 → H2 (with inline style)
+    assert "<h3 " in result  # H2 → H3 (with inline style)
+    assert "</h2>" in result
+    assert "</h3>" in result
 
 
 def test_markdown_to_html_list():
