@@ -105,6 +105,51 @@ def is_oncall_hours(dt: datetime, config: dict, tz: ZoneInfo, workdays: list[int
     return False
 
 
+def _calculate_business_minutes(start: datetime, end: datetime, config: dict, tz: ZoneInfo) -> float:
+    """Calculate minutes between two datetimes counting only business hours.
+
+    Walks through each minute from start to end and counts only those
+    that fall within business hours. For accuracy without excessive iteration,
+    we walk day-by-day and calculate overlap with business hours per day.
+    """
+    start_hour = config.get("start_hour", 9)
+    end_hour = config.get("end_hour", 18)
+    workdays = config.get("workdays", [0, 1, 2, 3, 4])
+
+    start_local = start.astimezone(tz)
+    end_local = end.astimezone(tz)
+
+    if start_local >= end_local:
+        return 0.0
+
+    total_minutes = 0.0
+    current = start_local
+
+    while current < end_local:
+        # If not a workday, skip to next day
+        if current.weekday() not in workdays:
+            next_day = current.replace(hour=0, minute=0, second=0) + timedelta(days=1)
+            current = next_day
+            continue
+
+        # Business window for this day
+        biz_start = current.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+        biz_end = current.replace(hour=end_hour, minute=0, second=0, microsecond=0)
+
+        # Overlap between [current, end_local] and [biz_start, biz_end]
+        overlap_start = max(current, biz_start)
+        overlap_end = min(end_local, biz_end)
+
+        if overlap_start < overlap_end:
+            total_minutes += (overlap_end - overlap_start).total_seconds() / 60
+
+        # Move to next day
+        next_day = current.replace(hour=0, minute=0, second=0) + timedelta(days=1)
+        current = next_day
+
+    return total_minutes
+
+
 def detect_calls(comments: list) -> dict:
     """Detect and count calls/meetings from comments.
 
@@ -142,6 +187,15 @@ def detect_calls(comments: list) -> dict:
     teams_pattern = re.compile(r'(teams\.microsoft\.com[^\s]*)', re.IGNORECASE)
     meet_pattern = re.compile(r'(meet\.google\.com[^\s]*)', re.IGNORECASE)
 
+    # Duration patterns (e.g., "4.5-hour call", "2.5 hours", "45 minute call")
+    duration_pattern = re.compile(
+        r'(\d+(?:\.\d+)?)\s*[-.]?\s*hours?\s*(?:call|meeting)|'
+        r'(\d+(?:\.\d+)?)\s*[-.]?\s*minutes?\s*(?:call|meeting)|'
+        r'(?:call|meeting)\s*(?:lasted|took|was)\s*(?:about\s*)?(\d+(?:\.\d+)?)\s*hours?|'
+        r'(?:call|meeting)\s*(?:lasted|took|was)\s*(?:about\s*)?(\d+)\s*minutes?',
+        re.IGNORECASE
+    )
+
     # False positive patterns to exclude
     exclude_patterns = re.compile(
         r'callback|recall|localhost|api\.call|function.?call|method.?call|system.?call',
@@ -153,9 +207,12 @@ def detect_calls(comments: list) -> dict:
     links = set()
     evidence_phrases = []
     link_details = []
+    call_dates = []  # Dates when call evidence was found
+    call_durations = []  # Durations mentioned (in minutes)
 
     for comment in comments:
         body = comment.get("plain_body") or comment.get("body") or ""
+        comment_date = (comment.get("created_at") or "")[:10]  # YYYY-MM-DD
 
         if exclude_patterns.search(body):
             continue
@@ -163,24 +220,37 @@ def detect_calls(comments: list) -> dict:
         if setup_patterns.search(body):
             setup_count += 1
 
+        # Capture call durations
+        dur_matches = duration_pattern.findall(body)
+        for dur_match in dur_matches:
+            # Groups: (hours, minutes, hours_alt, minutes_alt)
+            hours = dur_match[0] or dur_match[2]
+            minutes = dur_match[1] or dur_match[3]
+            if hours:
+                call_durations.append(float(hours) * 60)
+            elif minutes:
+                call_durations.append(float(minutes))
+
         # Capture evidence phrases
         happened_matches = happened_patterns.findall(body)
         if happened_matches:
             happened_count += len(happened_matches)
             evidence_phrases.extend(happened_matches)
+            if comment_date:
+                call_dates.append(comment_date)
 
         # Capture links with platform info
         for match in zoom_pattern.findall(body):
             links.add(match)
-            link_details.append({"platform": "Zoom", "link": match})
+            link_details.append({"platform": "Zoom", "link": match, "date": comment_date})
         for match in teams_pattern.findall(body):
             link = match.split()[0]  # Take just the URL part
             links.add(link)
-            link_details.append({"platform": "Teams", "link": link})
+            link_details.append({"platform": "Teams", "link": link, "date": comment_date})
         for match in meet_pattern.findall(body):
             link = match.split()[0]
             links.add(link)
-            link_details.append({"platform": "Meet", "link": link})
+            link_details.append({"platform": "Meet", "link": link, "date": comment_date})
 
     # Estimate actual calls
     if happened_count > 0:
@@ -216,6 +286,9 @@ def detect_calls(comments: list) -> dict:
         "links": list(links),
         "evidence": list(set(evidence_phrases))[:3],  # Top 3 unique evidence phrases
         "link_details": unique_link_details[:3],  # Top 3 unique links
+        "call_dates": sorted(set(call_dates)),  # Unique dates when calls happened
+        "call_durations": call_durations,  # Durations in minutes
+        "total_call_duration_mins": sum(call_durations) if call_durations else None,
     }
 
 
@@ -327,14 +400,16 @@ def calculate_frt_by_priority(
         priority = ticket.get("priority", "normal")
         customer = ticket.get("customer", "unknown")
 
-        metric = metrics.get(tid, {})
-        replies = metric.get("replies", 0)
+        # Use comment-based FRT from ticket_data first, fallback to metrics API
+        frt_calendar = ticket.get("frt_calendar")
+        frt_business = ticket.get("frt_business")
 
-        if replies == 0:
-            continue  # Skip tickets without replies
-
-        frt_calendar = metric.get("frt_calendar")
-        frt_business = metric.get("frt_business")
+        if frt_calendar is None:
+            metric = metrics.get(tid, {})
+            if metric.get("replies", 0) == 0:
+                continue
+            frt_calendar = metric.get("frt_calendar")
+            frt_business = metric.get("frt_business")
 
         if frt_calendar is None:
             continue
@@ -459,6 +534,12 @@ def main():
         oncall_settings = bh_config.get("oncall", {})
         tz = ZoneInfo(bh_settings.get("timezone", "Europe/Berlin"))
         workdays = bh_settings.get("workdays", [0, 1, 2, 3, 4])
+    else:
+        tz = ZoneInfo("UTC")
+
+    # Make period dates timezone-aware for comment filtering
+    period_start = start_date.replace(tzinfo=tz)
+    period_end = (end_date + timedelta(days=1)).replace(tzinfo=tz)  # End of end_date (inclusive)
 
     period_info = {
         "start_date": start_date.strftime("%b %d, %Y"),
@@ -555,6 +636,10 @@ def main():
     resolution_values = []
     reopen_count = 0
 
+    # New vs existing ticket tracking
+    new_ticket_count = 0
+    existing_ticket_count = 0
+
     # Business hours tracking
     tickets_outside_hours = []
     customer_msgs_outside_hours = 0
@@ -570,10 +655,17 @@ def main():
         status_counts[status] += 1
         priority_counts[priority] += 1
 
-        # Check if ticket created outside business hours (only if configured)
-        created_at = parse_timestamp(ticket.get("created_at"), tz) if track_business_hours else None
+        # Classify as new (created in period) or existing (created before period)
+        created_at = parse_timestamp(ticket.get("created_at"), tz)
+        is_new_ticket = created_at and created_at >= period_start
+        if is_new_ticket:
+            new_ticket_count += 1
+        else:
+            existing_ticket_count += 1
+
+        # Check if ticket created outside business hours (only for new tickets)
         ticket_outside_hours = False
-        if track_business_hours and created_at:
+        if track_business_hours and created_at and is_new_ticket:
             ticket_outside_hours = not is_business_hours(created_at, bh_settings, tz)
 
         # Find ticket details file
@@ -593,6 +685,7 @@ def main():
         msg_count = 0
         public_count = 0
         private_count = 0
+        agent_reply_count = 0
         call_info = {"detected": False, "confirmed": 0, "likely": 0, "requests": 0, "total_estimated": 0, "links": []}
         ticket_customer_msgs_ooh = 0
         ticket_support_replies_ooh = 0
@@ -600,10 +693,23 @@ def main():
         if details_file:
             with open(details_file) as f:
                 details = json.load(f)
-            comments = details.get("data", {}).get("comments", [])
+            all_comments = details.get("data", {}).get("comments", [])
+
+            # Filter comments to only those within the reporting period
+            comments = []
+            for c in all_comments:
+                c_time = parse_timestamp(c.get("created_at"), tz)
+                if c_time and period_start <= c_time < period_end:
+                    comments.append(c)
+
             msg_count = len(comments)
             public_count = sum(1 for c in comments if c.get("public", True))
             private_count = msg_count - public_count
+            # Count agent replies: public comments not from the requester
+            agent_reply_count = sum(
+                1 for c in comments
+                if c.get("public", True) and c.get("author_id") != rid
+            )
             call_info = detect_calls(comments)
 
             # Analyze each comment for business hours (only if configured)
@@ -622,35 +728,54 @@ def main():
                             ticket_support_replies_ooh += 1
                             support_replies_outside_hours += 1
 
-        # Get metrics - prefer pre-loaded all_metrics, fallback to file
-        frt = None
+        # Calculate FRT from comments for new tickets
         frt_calendar = None
         frt_business = None
+        frt = None
         resolution = None
         reopens = 0
         replies = 0
 
-        if tid in all_metrics:
-            # Use pre-loaded metrics
-            metric = all_metrics[tid]
-            frt_calendar = metric.get("frt_calendar")
-            frt_business = metric.get("frt_business")
-            resolution = metric.get("resolution_calendar")
-            reopens = metric.get("reopens", 0)
-            replies = metric.get("replies", 0)
-        elif metrics_file:
-            # Fallback to metrics file
-            with open(metrics_file) as f:
-                metrics_data = json.load(f)
-            metric = metrics_data.get("data", {}).get("ticket_metric", {})
-            frt_calendar = metric.get("reply_time_in_minutes", {}).get("calendar")
-            frt_business = metric.get("reply_time_in_minutes", {}).get("business")
-            resolution = metric.get("full_resolution_time_in_minutes", {}).get("calendar")
-            reopens = metric.get("reopens", 0)
-            replies = metric.get("replies", 0)
+        if is_new_ticket and details_file and created_at:
+            # Find first public agent reply from ALL comments (not filtered by period)
+            first_agent_reply_time = None
+            for c in sorted(all_comments, key=lambda x: x.get("created_at", "")):
+                if c.get("public", True) and c.get("author_id") != rid:
+                    reply_time = parse_timestamp(c.get("created_at"), tz)
+                    if reply_time and reply_time > created_at:
+                        first_agent_reply_time = reply_time
+                        break
+
+            if first_agent_reply_time:
+                # Calendar FRT = wall clock difference in minutes
+                frt_calendar = (first_agent_reply_time - created_at).total_seconds() / 60
+
+                # Business hours FRT = only count minutes during business hours
+                if track_business_hours:
+                    frt_business = _calculate_business_minutes(
+                        created_at, first_agent_reply_time, bh_settings, tz
+                    )
+
+        # Fallback to metrics API if available and no comment-based FRT
+        if frt_calendar is None:
+            if tid in all_metrics:
+                metric = all_metrics[tid]
+                frt_calendar = metric.get("frt_calendar")
+                frt_business = metric.get("frt_business")
+                resolution = metric.get("resolution_calendar")
+                reopens = metric.get("reopens", 0)
+                replies = metric.get("replies", 0)
+            elif metrics_file:
+                with open(metrics_file) as f:
+                    metrics_data = json.load(f)
+                metric = metrics_data.get("data", {}).get("ticket_metric", {})
+                frt_calendar = metric.get("reply_time_in_minutes", {}).get("calendar")
+                frt_business = metric.get("reply_time_in_minutes", {}).get("business")
+                resolution = metric.get("full_resolution_time_in_minutes", {}).get("calendar")
+                reopens = metric.get("reopens", 0)
+                replies = metric.get("replies", 0)
 
         # Determine FRT based on on-call status
-        # On-call tickets use calendar time, others use business hours
         oncall_priorities_list = oncall_settings.get("priorities", ["urgent"]) if oncall_settings else ["urgent"]
         oncall_customers_list = oncall_settings.get("customers", []) if oncall_settings else []
 
@@ -686,10 +811,12 @@ def main():
             "resolution_mins": resolution,
             "reopens": reopens,
             "replies": replies,
+            "agent_replies": agent_reply_count,
             "outside_hours": ticket_outside_hours,
             "customer_msgs_ooh": ticket_customer_msgs_ooh,
             "support_replies_ooh": ticket_support_replies_ooh,
             "customer": customer,
+            "is_new": is_new_ticket,
         })
 
         # Track tickets outside business hours (only if configured)
@@ -712,7 +839,7 @@ def main():
             # Empty customers = all customers; otherwise check if in list
             customer_match = len(oncall_customers) == 0 or customer in oncall_customers
 
-            if priority_match and customer_match and is_oncall_hours(created_at, oncall_settings, tz, workdays):
+            if priority_match and customer_match and is_oncall_hours(created_at, oncall_settings, tz, workdays) and is_new_ticket:
                 oncall_engagements.append({
                     "ticket_id": tid,
                     "subject": ticket.get("subject", "")[:40],
@@ -725,7 +852,7 @@ def main():
         # Customer stats
         customer_stats[customer]["tickets"] += 1
         customer_stats[customer]["messages"] += msg_count
-        customer_stats[customer]["replies"] += replies
+        customer_stats[customer]["replies"] += agent_reply_count
         customer_stats[customer]["ticket_ids"].append(tid)
         customer_stats[customer]["calls"] += call_info["total_estimated"]
 
@@ -756,8 +883,8 @@ def main():
             "count": len(resolution_values),
         }
 
-    # Calculate total replies from metrics
-    total_replies = sum(t.get("replies", 0) for t in ticket_analysis)
+    # Calculate total replies from comments (agent replies in period)
+    total_replies = sum(t.get("agent_replies", 0) for t in ticket_analysis)
 
     # Build output (period_info comes from command line args)
     output = {
@@ -765,6 +892,8 @@ def main():
         "customer_stats": dict(customer_stats),
         "summary": {
             "total_tickets": len(tickets),
+            "new_tickets": new_ticket_count,
+            "existing_tickets": existing_ticket_count,
             "total_messages": sum(t["messages"] for t in ticket_analysis),
             "total_replies": total_replies,
             "tickets_with_calls": sum(1 for t in ticket_analysis if t["call_info"]["total_estimated"] > 0),
@@ -821,10 +950,21 @@ def main():
             if call_info.get("links"):
                 link_type = "zoom link" if any("zoom" in l.lower() for l in call_info["links"]) else "meeting link"
                 evidence_str = f'"{evidence[0]}" + {link_type}' if evidence else link_type
+            # Build duration string if available
+            duration_str = None
+            if call_info.get("total_call_duration_mins"):
+                total_mins = call_info["total_call_duration_mins"]
+                if total_mins >= 60:
+                    duration_str = f"{total_mins/60:.1f}h"
+                else:
+                    duration_str = f"{int(total_mins)}m"
+
             confirmed_detail.append({
                 "ticket_id": t["ticket_id"],
                 "count": call_info["confirmed"],
                 "evidence": evidence_str,
+                "dates": call_info.get("call_dates", []),
+                "duration": duration_str,
             })
 
         # Collect likely call details
@@ -836,6 +976,7 @@ def main():
                         "ticket_id": t["ticket_id"],
                         "platform": ld.get("platform", "Unknown"),
                         "link": ld.get("link", "N/A"),
+                        "date": ld.get("date", ""),
                     })
             elif call_info.get("links"):
                 link = call_info["links"][0]
@@ -844,6 +985,7 @@ def main():
                     "ticket_id": t["ticket_id"],
                     "platform": platform,
                     "link": link,
+                    "date": call_info.get("call_dates", [""])[0] if call_info.get("call_dates") else "",
                 })
 
     # Sort confirmed by count descending
@@ -867,7 +1009,7 @@ def main():
     print("=" * 70)
 
     print(f"\n### Summary")
-    print(f"Total Tickets: {len(tickets)}")
+    print(f"Total Tickets: {len(tickets)} ({new_ticket_count} new, {existing_ticket_count} existing with activity)")
     print(f"Total Agent Replies: {total_replies}")
     print(f"Total Messages (from ticket-details): {output['summary']['total_messages']}")
     print(f"Tickets with Calls: {output['summary']['tickets_with_calls']} ({output['summary']['total_calls_estimated']} calls: {output['summary']['total_calls_confirmed']} confirmed, {output['summary']['total_calls_likely']} likely)")

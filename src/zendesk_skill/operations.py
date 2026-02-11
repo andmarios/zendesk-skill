@@ -1379,6 +1379,7 @@ async def send_slack_report(
         {
             "type": "section",
             "fields": [
+                {"type": "mrkdwn", "text": f"*New Tickets:*\n{summary.get('new_tickets', total_tickets)}"},
                 {"type": "mrkdwn", "text": f"*Total Tickets:*\n{total_tickets}"},
                 {"type": "mrkdwn", "text": f"*Agent Replies:*\n{total_replies}"},
                 {"type": "mrkdwn", "text": f"*Tickets w/ Calls:*\n{calls_text}"},
@@ -1481,6 +1482,24 @@ async def send_slack_report(
                 "type": "section",
                 "text": {"type": "mrkdwn", "text": f"*📞 Call/Meeting Analysis*\n{tickets_with} tickets ({pct}%) with calls · *{total_calls} total* ({confirmed} confirmed, {likely} likely)"},
             })
+
+            # Show confirmed call details with dates
+            confirmed_detail = call_analysis.get("confirmed_detail", [])
+            if confirmed_detail:
+                detail_lines = []
+                for item in confirmed_detail:
+                    dates = ", ".join(item.get("dates", [])) or "—"
+                    duration = f" ({item.get('duration')})" if item.get("duration") else ""
+                    detail_lines.append(f"• #{item['ticket_id']}: {item.get('count', 1)} call(s) on {dates}{duration}")
+                likely_detail = call_analysis.get("likely_detail", [])
+                for item in likely_detail:
+                    date = item.get("date", "—") or "—"
+                    detail_lines.append(f"• #{item['ticket_id']}: likely call on {date} ({item.get('platform', 'N/A')})")
+                if detail_lines:
+                    blocks.append({
+                        "type": "context",
+                        "elements": [{"type": "mrkdwn", "text": "\n".join(detail_lines)}],
+                    })
 
             # Top customers by call rate
             by_customer = call_analysis.get("by_customer", {})
@@ -1678,7 +1697,10 @@ def generate_markdown_report(report_data: dict) -> str:
     # Executive summary table
     lines.append("| Metric | Value |")
     lines.append("|--------|-------|")
-    lines.append(f"| Tickets Handled | {total_tickets} |")
+    new_tickets = summary.get("new_tickets", total_tickets)
+    existing_tickets = summary.get("existing_tickets", 0)
+    lines.append(f"| New Tickets Created | {new_tickets} |")
+    lines.append(f"| Total Tickets (incl. older active) | {total_tickets} |")
     lines.append(f"| Total Agent Replies | {total_replies} |")
 
     # Call stats
@@ -1889,20 +1911,23 @@ def generate_markdown_report(report_data: dict) -> str:
             confirmed_detail = call_analysis.get("confirmed_detail", [])
             if confirmed_detail:
                 lines.extend(["### Confirmed Calls (evidence in comments)", ""])
-                lines.append("| Ticket | Calls | Evidence |")
-                lines.append("|--------|-------|----------|")
+                lines.append("| Ticket | Calls | Date(s) | Duration | Evidence |")
+                lines.append("|--------|-------|---------|----------|----------|")
                 for item in confirmed_detail:
-                    lines.append(f"| #{item.get('ticket_id')} | {item.get('count', 1)} | {item.get('evidence', 'N/A')} |")
+                    dates = ", ".join(item.get("dates", [])) or "—"
+                    duration = item.get("duration") or "—"
+                    lines.append(f"| #{item.get('ticket_id')} | {item.get('count', 1)} | {dates} | {duration} | {item.get('evidence', 'N/A')} |")
                 lines.append("")
 
             # Likely calls detail if available
             likely_detail = call_analysis.get("likely_detail", [])
             if likely_detail:
                 lines.extend(["### Likely Calls (meeting link shared with setup)", ""])
-                lines.append("| Ticket | Platform | Link |")
-                lines.append("|--------|----------|------|")
+                lines.append("| Ticket | Platform | Date | Link |")
+                lines.append("|--------|----------|------|------|")
                 for item in likely_detail:
-                    lines.append(f"| #{item.get('ticket_id')} | {item.get('platform', 'N/A')} | {item.get('link', 'N/A')} |")
+                    date = item.get("date", "—") or "—"
+                    lines.append(f"| #{item.get('ticket_id')} | {item.get('platform', 'N/A')} | {date} | {item.get('link', 'N/A')} |")
                 lines.append("")
 
             # Call rate by customer if available
