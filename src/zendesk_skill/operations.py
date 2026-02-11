@@ -1324,8 +1324,9 @@ async def send_slack_report(
     for t in sorted_tickets:
         call_emoji = " 📞" if t.get("has_calls") else ""
         subject = (t.get("subject") or "")[:35]
+        customer = t.get("customer", "")
         ticket_lines.append(
-            f"• *#{t.get('ticket_id')}* – {t.get('messages', 0)} msgs{call_emoji} – _{subject}_"
+            f"• *#{t.get('ticket_id')}* – {t.get('messages', 0)} msgs{call_emoji} – {customer} – _{subject}_"
         )
 
     # Build period string
