@@ -160,6 +160,10 @@ def auth_status_cmd() -> None:
         status["authenticated"] = False
         status["guidance"] = result["guidance"]
 
+    # Check OAuth status
+    from zendesk_skill.auth.oauth import get_oauth_status
+    status["oauth"] = get_oauth_status()
+
     output_json(status)
 
 
@@ -252,6 +256,81 @@ def auth_logout_slack_cmd() -> None:
 
     if result["warning"]:
         output["warning"] = result["warning"]
+
+    output_json(output)
+
+
+@auth_app.command("login-oauth")
+def auth_login_oauth_cmd(
+    subdomain: Annotated[
+        str | None,
+        typer.Option("--subdomain", "-s", help="Zendesk subdomain (e.g., 'company' for company.zendesk.com)"),
+    ] = None,
+    client_id: Annotated[
+        str | None,
+        typer.Option("--client-id", help="OAuth client ID (or set ZENDESK_OAUTH_CLIENT_ID)"),
+    ] = None,
+    client_secret: Annotated[
+        str | None,
+        typer.Option("--client-secret", help="OAuth client secret (or set ZENDESK_OAUTH_CLIENT_SECRET)"),
+    ] = None,
+    manual: Annotated[
+        bool,
+        typer.Option("--manual", "-m", help="Use manual code paste instead of browser redirect"),
+    ] = False,
+) -> None:
+    """Authenticate with Zendesk using OAuth 2.0.
+
+    Opens a browser for authorization (or use --manual for headless environments).
+    Requires an OAuth client registered in Zendesk Admin Center.
+    """
+    import os
+    from zendesk_skill.auth.oauth import OAuthProvider
+    from zendesk_skill.client import _load_config_from_file
+
+    # Determine subdomain
+    if not subdomain:
+        subdomain = os.environ.get("ZENDESK_SUBDOMAIN")
+    if not subdomain:
+        config = _load_config_from_file()
+        subdomain = config.get("subdomain")
+    if not subdomain:
+        subdomain = typer.prompt("Zendesk subdomain (e.g., 'company' for company.zendesk.com)")
+
+    try:
+        provider = OAuthProvider(subdomain=subdomain)
+        result = provider.run_auth_flow(
+            manual=manual, client_id=client_id, client_secret=client_secret
+        )
+
+        output_json({
+            "success": True,
+            "message": "OAuth authentication successful.",
+            "token_path": result["token_path"],
+            "scope": result["scope"],
+        })
+    except Exception as e:
+        output_error(str(e))
+
+
+@auth_app.command("logout-oauth")
+def auth_logout_oauth_cmd() -> None:
+    """Remove saved OAuth token.
+
+    Note: Does not revoke the token on Zendesk's side.
+    """
+    from zendesk_skill.auth.oauth import delete_oauth_token, OAUTH_TOKEN_PATH
+
+    deleted = delete_oauth_token()
+
+    output = {
+        "deleted": deleted,
+        "token_path": str(OAUTH_TOKEN_PATH),
+    }
+    if deleted:
+        output["message"] = "OAuth token removed."
+    else:
+        output["message"] = "No OAuth token file found."
 
     output_json(output)
 

@@ -12,18 +12,23 @@ zendesk-skill/
 ├── README.md                # User documentation
 ├── reference/               # Additional documentation
 │   └── search-syntax.md     # Zendesk search query reference
-├── backup-mcp/              # Backup of MCP server implementation
-│   └── server.py            # Original FastMCP server (if needed)
 ├── src/
 │   └── zendesk_skill/
 │       ├── __init__.py      # Package init with version
-│       ├── cli.py           # Typer CLI with 25 commands
+│       ├── cli.py           # Typer CLI with commands
 │       ├── client.py        # Zendesk API client (httpx-based)
 │       ├── formatting.py    # Markdown-to-HTML for write operations
 │       ├── storage.py       # Response storage + structure extraction
-│       └── queries.py       # jq query definitions
+│       ├── queries.py       # jq query definitions
+│       └── auth/            # Pluggable auth backends
+│           ├── __init__.py  # Package exports
+│           ├── provider.py  # AuthProvider protocol + resolve factory
+│           ├── token_auth.py # Basic Auth (email + API token)
+│           ├── oauth.py     # OAuth 2.0 Authorization Code + PKCE
+│           └── scopes.py    # OAuth scope constants
 └── tests/
-    └── test_basic.py        # Basic tests
+    ├── test_basic.py        # Basic + formatting tests
+    └── test_auth.py         # Auth package tests
 ```
 
 ## Architecture
@@ -34,10 +39,17 @@ zendesk-skill/
 - Outputs JSON to stdout
 - Saves full responses to `/tmp/zendesk-skill/`
 
+### Auth (auth/)
+- `AuthProvider` protocol: pluggable auth backends
+- `resolve_auth_provider()` factory: OAuth token → API token → error
+- `TokenAuthProvider`: Basic Auth with email + API token
+- `OAuthProvider`: OAuth 2.0 Authorization Code + PKCE, auto-refresh
+- Lazy imports in provider.py to avoid circular deps with client.py
+
 ### API Client (client.py)
 - httpx-based async HTTP client
-- Supports env vars and config file auth
-- Basic auth: `{email}/token:{token}`
+- Delegates auth to `AuthProvider` (accepts `auth_provider` param)
+- Backwards compatible: still accepts explicit email/token/subdomain
 - Proper error handling with actionable messages
 
 ### Storage (storage.py)
@@ -132,13 +144,21 @@ def command_name(
 ## External Requirements
 
 - `jq` must be installed for `zendesk query` command to work
-- Zendesk API credentials (email + API token + subdomain)
+- Zendesk credentials: OAuth token or API token (email + token + subdomain)
 
 ## Auth Configuration
 
-Credentials are loaded from (in order):
+Auth provider is resolved automatically (first match wins):
+1. **OAuth token** on disk (`~/.claude/.zendesk-skill/oauth_token.json`) → `OAuthProvider`
+2. **API token** (env vars or config file) → `TokenAuthProvider`
+
+API token credentials load from:
 1. Environment variables: `ZENDESK_EMAIL`, `ZENDESK_TOKEN`, `ZENDESK_SUBDOMAIN`
 2. Config file: `~/.claude/.zendesk-skill/config.json`
+
+OAuth client credentials load from:
+1. Environment variables: `ZENDESK_OAUTH_CLIENT_ID`, `ZENDESK_OAUTH_CLIENT_SECRET`
+2. Config file: `oauth_client_id`, `oauth_client_secret` in config.json (auto-saved on login)
 
 ## Response Format
 

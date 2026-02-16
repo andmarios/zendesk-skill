@@ -108,9 +108,11 @@ All write commands (`create-ticket`, `add-note`, `add-comment`) support **Markdo
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `auth login` | Configure Zendesk credentials | `uv run zendesk auth login` |
-| `auth status` | Check Zendesk auth configuration | `uv run zendesk auth status` |
-| `auth logout` | Remove Zendesk credentials | `uv run zendesk auth logout` |
+| `auth login` | Configure Zendesk API token credentials | `uv run zendesk auth login` |
+| `auth login-oauth` | OAuth 2.0 login (opens browser) | `uv run zendesk auth login-oauth --subdomain co` |
+| `auth status` | Check auth configuration (token + OAuth) | `uv run zendesk auth status` |
+| `auth logout` | Remove API token credentials | `uv run zendesk auth logout` |
+| `auth logout-oauth` | Remove OAuth token | `uv run zendesk auth logout-oauth` |
 | `auth login-slack` | Configure Slack webhook | `uv run zendesk auth login-slack` |
 | `auth status-slack` | Check Slack configuration | `uv run zendesk auth status-slack` |
 | `auth logout-slack` | Remove Slack configuration | `uv run zendesk auth logout-slack` |
@@ -397,52 +399,34 @@ When downloading attachments, if a file already exists with the same name, a num
 
 ### Authentication Setup
 
-You need three values:
-- **Email**: Your Zendesk agent email
-- **API Token**: Generated in Zendesk Admin Center (not your password!)
-- **Subdomain**: First part of your Zendesk URL (e.g., `mycompany` from `mycompany.zendesk.com`)
+Two authentication methods are supported. Both can coexist — OAuth takes priority when a valid token is present.
 
-#### Getting Your Credentials
+**Subdomain**: First part of your Zendesk URL (e.g., `mycompany` from `mycompany.zendesk.com`)
 
-**Email**: Use the email address you log into Zendesk with.
+#### Option A: OAuth 2.0 (recommended)
 
-**Subdomain**: Look at your Zendesk URL:
-- If you access `https://acme.zendesk.com`, your subdomain is `acme`
-- If you access `https://support.mycompany.com`, ask your admin for the subdomain
+Requires an OAuth client configured in Zendesk Admin Center with redirect URL `http://127.0.0.1:8080/callback`.
 
-**API Token** (requires admin access or help from admin):
+```bash
+uv run zendesk auth login-oauth --subdomain yourcompany --client-id YOUR_ID --client-secret YOUR_SECRET
+```
 
-1. Log in to Zendesk
-2. Click the **Admin Center** icon (gear) in the sidebar
-3. Navigate to **Apps and integrations** → **APIs** → **Zendesk API**
-4. In the **Settings** tab, ensure **Token Access** is enabled
-5. Click **Add API token**
-6. Give it a description (e.g., "Claude Code CLI")
-7. Click **Copy** immediately - the token is only shown once!
+Opens a browser for authorization. For headless environments, add `--manual` to paste the code instead.
 
-**Don't have admin access?** Ask your Zendesk administrator to:
-1. Create an API token for you, OR
-2. Grant you admin access to create your own
-
-**Token not working?** Common issues:
-- Using your password instead of the API token
-- Token Access is disabled in Zendesk settings
-- Your account doesn't have API access permissions
-
-#### Option A: Interactive Setup (recommended)
+#### Option B: API Token (interactive)
 
 ```bash
 uv run zendesk auth login
 # Prompts for email, token (hidden), and subdomain
 ```
 
-#### Option B: Non-Interactive Setup (for automation)
+#### Option C: API Token (non-interactive)
 
 ```bash
 uv run zendesk auth login --email "your@email.com" --token "your-token" --subdomain "yourcompany"
 ```
 
-#### Option C: Environment Variables
+#### Option D: Environment Variables
 
 ```bash
 export ZENDESK_EMAIL="your-email@company.com"
@@ -450,21 +434,11 @@ export ZENDESK_TOKEN="your-api-token"
 export ZENDESK_SUBDOMAIN="yourcompany"
 ```
 
-#### Option D: Config File (manual)
+#### Getting an API Token
 
-Create `~/.claude/.zendesk-skill/config.json`:
-```json
-{
-  "email": "your-email@company.com",
-  "token": "your-api-token",
-  "subdomain": "yourcompany"
-}
-```
-
-Secure the file:
-```bash
-chmod 600 ~/.claude/.zendesk-skill/config.json
-```
+1. Go to **Admin Center** > **Apps and integrations** > **APIs** > **Zendesk API**
+2. Ensure **Token Access** is enabled
+3. Click **Add API token**, copy it (shown only once)
 
 #### Check Auth Status
 
@@ -478,10 +452,11 @@ uv run zendesk auth status
 uv run zendesk me
 ```
 
-#### Remove Saved Credentials
+#### Remove Credentials
 
 ```bash
-uv run zendesk auth logout
+uv run zendesk auth logout       # Remove API token
+uv run zendesk auth logout-oauth  # Remove OAuth token
 ```
 
 ## Notes for Claude Code Users

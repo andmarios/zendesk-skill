@@ -2,6 +2,8 @@
 
 A Claude Code skill for Zendesk Support integration. Provides both a CLI and MCP server for searching tickets, viewing details, analyzing metrics, managing users/organizations, updating tickets, and sending Slack reports.
 
+> This project was built almost entirely by Claude Code through iterative conversation — designing, implementing, testing against a live Zendesk instance, and fixing issues together over multiple sessions. It's a tool I use often and am sharing in case others find it useful.
+
 ## Features
 
 - **CLI + MCP Server** - Use via command line or as an MCP server for AI assistants
@@ -42,23 +44,7 @@ uv run zendesk me
 
 ## Authentication Setup
 
-You need three pieces of information from Zendesk:
-
-| Value | Description | Example |
-|-------|-------------|---------|
-| **Email** | Your Zendesk agent email | `agent@company.com` |
-| **API Token** | Generated API token (not your password) | `abCdEf123456...` |
-| **Subdomain** | Your Zendesk subdomain | `mycompany` (from `mycompany.zendesk.com`) |
-
-### Getting Your API Token
-
-1. Log in to your Zendesk instance as an admin
-2. Go to **Admin Center** (gear icon) > **Apps and integrations** > **APIs** > **Zendesk API**
-3. In the **Settings** tab, ensure **Token Access** is enabled
-4. Click **Add API token**
-5. Give it a description (e.g., "Claude Code")
-6. Click **Copy** to copy the token (you cannot view it again)
-7. Click **Save**
+Two authentication methods are supported. Both can coexist — OAuth takes priority when a valid token is present.
 
 ### Finding Your Subdomain
 
@@ -66,33 +52,45 @@ Your subdomain is the first part of your Zendesk URL:
 - `https://mycompany.zendesk.com` -> subdomain is `mycompany`
 - `https://support-acme.zendesk.com` -> subdomain is `support-acme`
 
-### Configure Credentials
+### Method 1: OAuth 2.0 (recommended)
 
-#### Option A: Interactive Setup (recommended)
+Uses OAuth 2.0 Authorization Code with PKCE. Tokens auto-refresh when expired.
 
-```bash
-uv run zendesk auth
-```
+**Prerequisites:** Create an OAuth client in Zendesk Admin Center:
+1. Go to **Admin Center** > **Apps and integrations** > **APIs** > **OAuth Clients**
+2. Click **Add OAuth client**
+3. Set redirect URL to `http://127.0.0.1:8080/callback`
+4. Note the **Client ID** and **Client Secret**
 
-This prompts for your credentials and saves them.
-
-#### Option B: Config File
-
-Create `~/.claude/.zendesk-skill/config.json`:
+**Login:**
 
 ```bash
-mkdir -p ~/.claude/.zendesk-skill
-cat > ~/.claude/.zendesk-skill/config.json << 'EOF'
-{
-  "email": "your-email@company.com",
-  "token": "your-api-token",
-  "subdomain": "yourcompany"
-}
-EOF
-chmod 600 ~/.claude/.zendesk-skill/config.json
+uv run zendesk auth login-oauth --subdomain yourcompany --client-id YOUR_ID --client-secret YOUR_SECRET
 ```
 
-#### Option C: Environment Variables
+A browser window opens for authorization. After approving, the token is saved to `~/.claude/.zendesk-skill/oauth_token.json`.
+
+For headless environments, add `--manual` to paste the authorization code instead.
+
+Client credentials can also be set via environment variables (`ZENDESK_OAUTH_CLIENT_ID`, `ZENDESK_OAUTH_CLIENT_SECRET`) or in `config.json` (`oauth_client_id`, `oauth_client_secret`).
+
+### Method 2: API Token
+
+Uses Basic Auth with email + API token.
+
+**Getting Your API Token:**
+1. Log in to your Zendesk instance as an admin
+2. Go to **Admin Center** > **Apps and integrations** > **APIs** > **Zendesk API**
+3. In the **Settings** tab, ensure **Token Access** is enabled
+4. Click **Add API token**, copy it (shown only once)
+
+**Option A: Interactive Setup**
+
+```bash
+uv run zendesk auth login
+```
+
+**Option B: Environment Variables**
 
 ```bash
 export ZENDESK_EMAIL="your-email@company.com"
@@ -100,10 +98,22 @@ export ZENDESK_TOKEN="your-api-token"
 export ZENDESK_SUBDOMAIN="yourcompany"
 ```
 
+**Option C: Config File**
+
+Create `~/.claude/.zendesk-skill/config.json`:
+
+```json
+{
+  "email": "your-email@company.com",
+  "token": "your-api-token",
+  "subdomain": "yourcompany"
+}
+```
+
 ### Verify Authentication
 
 ```bash
-uv run zendesk auth-status
+uv run zendesk auth status
 uv run zendesk me
 ```
 
@@ -341,9 +351,11 @@ All write commands support **Markdown formatting** by default (converted to HTML
 - `zendesk me` - Test authentication
 
 ### Authentication
-- `zendesk auth` - Interactive credential setup
-- `zendesk auth-status` - Check auth configuration
-- `zendesk auth-delete` - Remove saved credentials
+- `zendesk auth login` - Interactive API token setup
+- `zendesk auth login-oauth` - OAuth 2.0 login (browser flow)
+- `zendesk auth status` - Check auth configuration
+- `zendesk auth logout` - Remove API token credentials
+- `zendesk auth logout-oauth` - Remove OAuth token
 
 ### Slack Integration
 - `zendesk slack-auth` - Configure Slack webhook

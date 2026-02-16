@@ -380,30 +380,44 @@ class ZendeskClient:
         token: str | None = None,
         subdomain: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
+        auth_provider: Any = None,
     ):
         """Initialize the client.
 
-        If credentials are not provided, they will be loaded from
-        environment variables or config file.
+        Args:
+            email: Zendesk email (legacy, backwards compatible)
+            token: Zendesk API token (legacy, backwards compatible)
+            subdomain: Zendesk subdomain (legacy, backwards compatible)
+            timeout: Request timeout in seconds
+            auth_provider: An AuthProvider instance. If provided, email/token/subdomain
+                are ignored. If not provided and email/token/subdomain are given, a
+                TokenAuthProvider is created. If nothing is provided,
+                resolve_auth_provider() is called to auto-detect credentials.
         """
-        if email and token and subdomain:
-            self.email = email
-            self.token = token
-            self.subdomain = subdomain
+        if auth_provider is not None:
+            self._auth_provider = auth_provider
+        elif email and token and subdomain:
+            from zendesk_skill.auth.token_auth import TokenAuthProvider
+
+            self._auth_provider = TokenAuthProvider(
+                email=email, token=token, subdomain=subdomain
+            )
         else:
-            self.email, self.token, self.subdomain = _get_credentials()
+            from zendesk_skill.auth.provider import resolve_auth_provider
+
+            self._auth_provider = resolve_auth_provider()
 
         self.timeout = timeout
-        self.base_url = f"https://{self.subdomain}.zendesk.com/api/v2"
-        self._auth_header = _build_auth_header(self.email, self.token)
+        self.base_url = f"https://{self._auth_provider.subdomain}.zendesk.com/api/v2"
 
     def _get_headers(self) -> dict[str, str]:
         """Get headers for API requests."""
-        return {
-            "Authorization": self._auth_header,
+        headers = self._auth_provider.get_auth_headers()
+        headers.update({
             "Content-Type": "application/json",
             "Accept": "application/json",
-        }
+        })
+        return headers
 
     async def request(
         self,
@@ -545,7 +559,7 @@ class ZendeskClient:
             try:
                 response = await client.get(
                     url,
-                    headers={"Authorization": self._auth_header},
+                    headers=self._auth_provider.get_auth_headers(),
                     timeout=timeout or self.timeout,
                 )
                 response.raise_for_status()

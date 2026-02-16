@@ -173,6 +173,7 @@ def test_client_auth_header():
 def test_client_singleton():
     """Test client singleton pattern."""
     from zendesk_skill.client import reset_client, CONFIG_PATH
+    from zendesk_skill.auth.oauth import OAUTH_TOKEN_PATH
 
     # Reset to clear any existing singleton
     reset_client()
@@ -193,6 +194,12 @@ def test_client_singleton():
         with open(CONFIG_PATH) as f:
             saved_config = f.read()
 
+    # Save OAuth token file if it exists
+    saved_oauth = None
+    if OAUTH_TOKEN_PATH.exists():
+        with open(OAUTH_TOKEN_PATH) as f:
+            saved_oauth = f.read()
+
     try:
         # Clear env vars
         for key in saved:
@@ -202,6 +209,10 @@ def test_client_singleton():
         # Temporarily remove config file
         if CONFIG_PATH.exists():
             CONFIG_PATH.unlink()
+
+        # Temporarily remove OAuth token file
+        if OAUTH_TOKEN_PATH.exists():
+            OAUTH_TOKEN_PATH.unlink()
 
         from zendesk_skill.client import ZendeskAuthError, ZendeskClient
 
@@ -220,6 +231,13 @@ def test_client_singleton():
             with open(CONFIG_PATH, "w") as f:
                 f.write(saved_config)
             CONFIG_PATH.chmod(0o600)
+
+        # Restore OAuth token file
+        if saved_oauth is not None:
+            OAUTH_TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(OAUTH_TOKEN_PATH, "w") as f:
+                f.write(saved_oauth)
+            OAUTH_TOKEN_PATH.chmod(0o600)
 
         reset_client()
 
@@ -266,7 +284,11 @@ def test_auth_subcommands_exist():
     assert "status-slack" in command_names
     assert "logout-slack" in command_names
 
-    assert len(command_names) == 6
+    # OAuth auth commands
+    assert "login-oauth" in command_names
+    assert "logout-oauth" in command_names
+
+    assert len(command_names) == 8
 
 
 def test_get_auth_status():
