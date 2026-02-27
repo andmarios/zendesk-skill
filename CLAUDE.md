@@ -16,7 +16,8 @@ zendesk-skill/
 │   └── zendesk_skill/
 │       ├── __init__.py      # Package init with key re-exports
 │       ├── cli.py           # Typer CLI with commands
-│       ├── client.py        # Zendesk API client (httpx-based)
+│       ├── client.py        # Zendesk API client (httpx-based) + secrets management
+│       ├── crypto.py        # Fernet encryption at rest (machine-derived key, HKDF)
 │       ├── formatting.py    # Markdown-to-HTML for write operations
 │       ├── operations.py    # Shared business logic (CLI + MCP server)
 │       ├── reporting.py     # Slack & Markdown report generation
@@ -150,6 +151,7 @@ def command_name(
 - `httpx>=0.27.0` - Async HTTP client
 - `pydantic>=2.0.0` - Input validation
 - `mistune>=3.0.0` - Markdown-to-HTML conversion for write operations
+- `cryptography>=42.0.0` - Fernet encryption for secrets at rest
 
 ## External Requirements
 
@@ -159,16 +161,37 @@ def command_name(
 ## Auth Configuration
 
 Auth provider is resolved automatically (first match wins):
-1. **OAuth token** on disk (`~/.config/zd-cli/oauth_token.json`) → `OAuthProvider`
-2. **API token** (env vars or config file) → `TokenAuthProvider`
+1. **OAuth token** on disk (`~/.config/zd-cli/oauth_token.json.enc`) → `OAuthProvider`
+2. **API token** (env vars or encrypted secrets) → `TokenAuthProvider`
 
 API token credentials load from:
 1. Environment variables: `ZENDESK_EMAIL`, `ZENDESK_TOKEN`, `ZENDESK_SUBDOMAIN`
-2. Config file: `~/.config/zd-cli/config.json`
+2. Config file (`config.json`) for email/subdomain + encrypted secrets (`secrets.json.enc`) for token
 
 OAuth client credentials load from:
 1. Environment variables: `ZENDESK_OAUTH_CLIENT_ID`, `ZENDESK_OAUTH_CLIENT_SECRET`
-2. Config file: `oauth_client_id`, `oauth_client_secret` in config.json (auto-saved on login)
+2. Encrypted secrets file (`secrets.json.enc`), managed via `zd-cli auth set-oauth-client`
+
+### Encryption at Rest
+
+Secret files (API tokens, OAuth tokens, client secrets) are encrypted using Fernet symmetric encryption. The key is derived at runtime from machine-specific identifiers and never stored on disk.
+
+- **Module**: `src/zendesk_skill/crypto.py`
+- **Key derivation**: `machine_id + username + app_id` → HKDF-SHA256 → Fernet key
+- **File convention**: `foo.json` → encrypted as `foo.json.enc`
+- **Auto-migration**: plaintext secrets in `config.json` are auto-migrated to `secrets.json.enc` on first access
+- **Opt-out**: Set `ZD_ENCRYPTION=none` to disable encryption entirely
+- **Salt**: Auto-generated, stored in `config.json` (plaintext config stays unencrypted)
+
+Storage layout:
+- `config.json` — plaintext: email, subdomain, encryption_salt, channel, auth mode settings
+- `secrets.json.enc` — encrypted: token, oauth_client_id, oauth_client_secret, slack_webhook_url
+- `oauth_token.json.enc` — encrypted: OAuth access/refresh tokens
+- `server_token.json.enc` — encrypted: relay server JWT
+
+CLI commands for managing encrypted credentials:
+- `zd-cli auth set-oauth-client` - Save OAuth client_id and client_secret (encrypted)
+- `zd-cli auth login` - Save API token credentials (token encrypted, email/subdomain in config)
 
 ## Response Format
 

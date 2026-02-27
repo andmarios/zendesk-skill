@@ -335,6 +335,49 @@ def auth_logout_oauth_cmd() -> None:
     output_json(output)
 
 
+@auth_app.command("set-oauth-client")
+def auth_set_oauth_client_cmd(
+    client_id: Annotated[
+        str | None,
+        typer.Option("--client-id", help="OAuth client ID"),
+    ] = None,
+    client_secret: Annotated[
+        str | None,
+        typer.Option("--client-secret", help="OAuth client secret"),
+    ] = None,
+) -> None:
+    """Save OAuth client credentials (encrypted at rest).
+
+    Since credentials are encrypted, they cannot be edited in config files directly.
+    Use this command to set or update OAuth client_id and client_secret.
+
+    Interactive mode (no options): prompts for credentials.
+    Non-interactive mode (both options): saves directly.
+    """
+    from zendesk_skill.client import _load_secrets, _save_secrets
+
+    all_provided = all([client_id, client_secret])
+    none_provided = not any([client_id, client_secret])
+
+    if not all_provided and not none_provided:
+        output_error("Either provide both --client-id and --client-secret, or neither for interactive mode.")
+
+    if none_provided:
+        typer.echo("Configure OAuth client credentials\n")
+        client_id = typer.prompt("OAuth Client ID")
+        client_secret = typer.prompt("OAuth Client Secret", hide_input=True)
+
+    secrets = _load_secrets()
+    secrets["oauth_client_id"] = client_id
+    secrets["oauth_client_secret"] = client_secret
+    _save_secrets(secrets)
+
+    output_json({
+        "success": True,
+        "message": "OAuth client credentials saved (encrypted).",
+    })
+
+
 # =============================================================================
 # Server Auth Commands
 # =============================================================================

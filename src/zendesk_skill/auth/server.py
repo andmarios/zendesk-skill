@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import secrets
 import base64
@@ -18,7 +17,8 @@ import httpx
 
 from zendesk_skill.auth.scopes import DEFAULT_SCOPES
 from zendesk_skill.auth.oauth import OAUTH_TOKEN_PATH
-from zendesk_skill.client import CONFIG_DIR, ZendeskAuthError, ZendeskAPIError, _load_config_from_file
+from zendesk_skill.client import CONFIG_DIR, ZendeskAuthError, ZendeskAPIError, _load_config_from_file, _get_encryption_key
+from zendesk_skill.crypto import save_encrypted, load_encrypted, delete_encrypted
 
 # Storage paths
 SERVER_TOKEN_PATH = CONFIG_DIR / "server_token.json"
@@ -132,11 +132,8 @@ class ServerAuthProvider:
 
     def delete_token(self) -> bool:
         """Delete the Zendesk API token file."""
-        if OAUTH_TOKEN_PATH.exists():
-            OAUTH_TOKEN_PATH.unlink()
-            self._token_data = None
-            return True
-        return False
+        self._token_data = None
+        return delete_encrypted(OAUTH_TOKEN_PATH)
 
     # -- Server authentication (CLI user -> relay server) ----------------------
 
@@ -165,8 +162,7 @@ class ServerAuthProvider:
             except Exception:
                 pass  # Server might be unreachable; still clean up locally
 
-        if SERVER_TOKEN_PATH.exists():
-            SERVER_TOKEN_PATH.unlink()
+        delete_encrypted(SERVER_TOKEN_PATH)
         self._server_token = None
 
     def server_status(self) -> dict[str, Any]:
@@ -560,25 +556,14 @@ class ServerAuthProvider:
         if self._server_token:
             return self._server_token
 
-        if not SERVER_TOKEN_PATH.exists():
-            return None
-
-        try:
-            with open(SERVER_TOKEN_PATH) as f:
-                self._server_token = json.load(f)
-            return self._server_token
-        except (json.JSONDecodeError, TypeError):
-            return None
+        data = load_encrypted(SERVER_TOKEN_PATH, _get_encryption_key())
+        if data:
+            self._server_token = data
+        return data
 
     def _save_server_token(self, token_data: dict[str, Any]) -> None:
         """Save server JWT to disk."""
-        SERVER_TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(SERVER_TOKEN_PATH, "w") as f:
-            json.dump(token_data, f, indent=2)
-        try:
-            SERVER_TOKEN_PATH.chmod(0o600)
-        except OSError:
-            pass
+        save_encrypted(SERVER_TOKEN_PATH, token_data, _get_encryption_key())
         self._server_token = token_data
 
     def _ensure_server_token(self, auto_login: bool = True) -> dict[str, Any]:
@@ -614,16 +599,8 @@ class ServerAuthProvider:
 
     def _load_zendesk_token(self) -> dict | None:
         """Load Zendesk API token from disk (oauth_token.json format)."""
-        if not OAUTH_TOKEN_PATH.exists():
-            return None
-
-        try:
-            with open(OAUTH_TOKEN_PATH) as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            return None
-
-        if not data.get("access_token"):
+        data = load_encrypted(OAUTH_TOKEN_PATH, _get_encryption_key())
+        if not data or not data.get("access_token"):
             return None
 
         self._token_data = data
@@ -656,10 +633,4 @@ class ServerAuthProvider:
             "expires_at": time.time() + expires_in,
         }
 
-        OAUTH_TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(OAUTH_TOKEN_PATH, "w") as f:
-            json.dump(self._token_data, f, indent=2)
-        try:
-            OAUTH_TOKEN_PATH.chmod(0o600)
-        except OSError:
-            pass
+        save_encrypted(OAUTH_TOKEN_PATH, self._token_data, _get_encryption_key())

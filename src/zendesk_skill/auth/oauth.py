@@ -18,7 +18,11 @@ from urllib.parse import urlencode, urlparse, parse_qs
 import httpx
 
 from zendesk_skill.auth.scopes import DEFAULT_SCOPES
-from zendesk_skill.client import CONFIG_DIR, ZendeskAuthError, ZendeskAPIError, _load_config_from_file, _save_config
+from zendesk_skill.client import (
+    CONFIG_DIR, ZendeskAuthError, ZendeskAPIError,
+    _load_config_from_file, _get_encryption_key, _load_secrets, _save_secrets,
+    _migrate_secrets_from_config,
+)
 
 # Token storage path
 OAUTH_TOKEN_PATH = CONFIG_DIR / "oauth_token.json"
@@ -41,33 +45,24 @@ def _generate_pkce_pair() -> tuple[str, str]:
 
 
 def _save_oauth_token(token_data: dict) -> None:
-    """Save OAuth token to disk with secure permissions."""
-    OAUTH_TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(OAUTH_TOKEN_PATH, "w") as f:
-        json.dump(token_data, f, indent=2)
-    try:
-        OAUTH_TOKEN_PATH.chmod(0o600)
-    except OSError:
-        pass
+    """Save OAuth token to disk (encrypted if enabled)."""
+    from zendesk_skill.crypto import save_encrypted
+
+    save_encrypted(OAUTH_TOKEN_PATH, token_data, _get_encryption_key())
 
 
 def _load_oauth_token() -> dict | None:
-    """Load OAuth token from disk, or None if not found."""
-    if not OAUTH_TOKEN_PATH.exists():
-        return None
-    try:
-        with open(OAUTH_TOKEN_PATH) as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return None
+    """Load OAuth token from disk (encrypted or plaintext), or None if not found."""
+    from zendesk_skill.crypto import load_encrypted
+
+    return load_encrypted(OAUTH_TOKEN_PATH, _get_encryption_key())
 
 
 def _delete_oauth_token() -> bool:
-    """Delete OAuth token file. Returns True if file was deleted."""
-    if OAUTH_TOKEN_PATH.exists():
-        OAUTH_TOKEN_PATH.unlink()
-        return True
-    return False
+    """Delete OAuth token file (encrypted and/or plaintext)."""
+    from zendesk_skill.crypto import delete_encrypted
+
+    return delete_encrypted(OAUTH_TOKEN_PATH)
 
 
 def _get_oauth_client_credentials(
@@ -96,10 +91,11 @@ def _get_oauth_client_credentials(
     if client_id and client_secret:
         return client_id, client_secret
 
-    # Fall back to config file
-    config = _load_config_from_file()
-    client_id = client_id or config.get("oauth_client_id")
-    client_secret = client_secret or config.get("oauth_client_secret")
+    # Fall back to encrypted secrets
+    _migrate_secrets_from_config()
+    secrets = _load_secrets()
+    client_id = client_id or secrets.get("oauth_client_id")
+    client_secret = client_secret or secrets.get("oauth_client_secret")
 
     if not client_id or not client_secret:
         raise ZendeskAuthError(
@@ -507,10 +503,10 @@ class OAuthProvider:
         _save_oauth_token(self._token_data)
 
         # Persist client credentials so token refresh works without env vars
-        config = _load_config_from_file()
-        config["oauth_client_id"] = client_id
-        config["oauth_client_secret"] = client_secret
-        _save_config(config)
+        secrets = _load_secrets()
+        secrets["oauth_client_id"] = client_id
+        secrets["oauth_client_secret"] = client_secret
+        _save_secrets(secrets)
 
         return {
             "success": True,

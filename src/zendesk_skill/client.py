@@ -11,7 +11,11 @@ import httpx
 # Config directory and file locations
 CONFIG_DIR = Path.home() / ".config" / "zd-cli"
 CONFIG_PATH = CONFIG_DIR / "config.json"
+SECRETS_PATH = CONFIG_DIR / "secrets.json"  # Encrypted to secrets.json.enc
 _LEGACY_CONFIG_DIR = Path.home() / ".claude" / ".zendesk-skill"
+
+# Keys that are secrets and belong in secrets.json.enc, not config.json
+_SECRET_KEYS = ("token", "oauth_client_id", "oauth_client_secret", "slack_webhook_url")
 
 
 def _migrate_config_dir() -> None:
@@ -69,6 +73,68 @@ def _load_config_from_file() -> dict[str, str]:
     return {}
 
 
+def _get_encryption_key() -> bytes | None:
+    """Return the Fernet encryption key, or None if encryption is disabled.
+
+    Set ZD_ENCRYPTION=none to disable encryption entirely.
+    """
+    if os.environ.get("ZD_ENCRYPTION", "").lower() == "none":
+        return None
+
+    from zendesk_skill.crypto import derive_key, generate_salt
+
+    config = _load_config_from_file()
+    salt = config.get("encryption_salt")
+    if not salt:
+        salt = generate_salt()
+        config["encryption_salt"] = salt
+        _save_config(config)
+    return derive_key(salt, "zd-cli")
+
+
+def _load_secrets() -> dict:
+    """Load secrets from encrypted secrets file."""
+    from zendesk_skill.crypto import load_encrypted
+
+    key = _get_encryption_key()
+    return load_encrypted(SECRETS_PATH, key) or {}
+
+
+def _save_secrets(secrets: dict) -> None:
+    """Save secrets to encrypted secrets file."""
+    from zendesk_skill.crypto import save_encrypted
+
+    key = _get_encryption_key()
+    save_encrypted(SECRETS_PATH, secrets, key)
+
+
+_secrets_migrated = False
+
+
+def _migrate_secrets_from_config() -> None:
+    """One-time migration: extract secret keys from config.json into secrets.json.enc."""
+    global _secrets_migrated
+    if _secrets_migrated:
+        return
+    _secrets_migrated = True
+
+    config = _load_config_from_file()
+    secrets_to_migrate = {k: config[k] for k in _SECRET_KEYS if k in config}
+
+    if not secrets_to_migrate:
+        return
+
+    # Merge with existing secrets (if any)
+    existing = _load_secrets()
+    existing.update(secrets_to_migrate)
+    _save_secrets(existing)
+
+    # Remove secret keys from config
+    for k in _SECRET_KEYS:
+        config.pop(k, None)
+    _save_config(config)
+
+
 def _get_credentials() -> tuple[str, str, str]:
     """Get credentials from environment variables or config file.
 
@@ -83,11 +149,13 @@ def _get_credentials() -> tuple[str, str, str]:
     token = os.environ.get("ZENDESK_TOKEN")
     subdomain = os.environ.get("ZENDESK_SUBDOMAIN")
 
-    # Fall back to config file
+    # Fall back to config file (non-secrets) and secrets file
     if not all([email, token, subdomain]):
+        _migrate_secrets_from_config()
         config = _load_config_from_file()
+        secrets = _load_secrets()
         email = email or config.get("email")
-        token = token or config.get("token")
+        token = token or secrets.get("token")
         subdomain = subdomain or config.get("subdomain")
 
     # Validate
@@ -139,7 +207,10 @@ def _save_config(config: dict) -> Path:
 
 
 def save_credentials(email: str, token: str, subdomain: str) -> Path:
-    """Save Zendesk credentials to config file.
+    """Save Zendesk credentials.
+
+    Email and subdomain go to config.json (not secret).
+    Token goes to secrets.json.enc (encrypted).
 
     Args:
         email: Zendesk email
@@ -149,14 +220,23 @@ def save_credentials(email: str, token: str, subdomain: str) -> Path:
     Returns:
         Path to the config file
     """
-    # Load existing config to preserve other settings (e.g., Slack)
+    # Non-secrets to config
     config = _load_config_from_file()
-    config.update({"email": email, "token": token, "subdomain": subdomain})
-    return _save_config(config)
+    config.update({"email": email, "subdomain": subdomain})
+    _save_config(config)
+
+    # Token to encrypted secrets
+    secrets = _load_secrets()
+    secrets["token"] = token
+    _save_secrets(secrets)
+
+    return CONFIG_PATH
 
 
 def save_slack_config(webhook_url: str, channel: str) -> Path:
-    """Save Slack webhook configuration to config file.
+    """Save Slack webhook configuration.
+
+    Channel goes to config.json, webhook URL goes to secrets.json.enc.
 
     Args:
         webhook_url: Slack incoming webhook URL
@@ -165,15 +245,19 @@ def save_slack_config(webhook_url: str, channel: str) -> Path:
     Returns:
         Path to the config file
     """
-    # Load existing config to preserve Zendesk credentials
     config = _load_config_from_file()
-    config["slack_webhook_url"] = webhook_url
     config["slack_channel"] = channel
-    return _save_config(config)
+    _save_config(config)
+
+    secrets = _load_secrets()
+    secrets["slack_webhook_url"] = webhook_url
+    _save_secrets(secrets)
+
+    return CONFIG_PATH
 
 
 def get_slack_config() -> tuple[str, str] | None:
-    """Get Slack configuration from environment or config file.
+    """Get Slack configuration from environment, config, or secrets.
 
     Returns:
         Tuple of (webhook_url, channel) or None if not configured
@@ -182,10 +266,12 @@ def get_slack_config() -> tuple[str, str] | None:
     webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
     channel = os.environ.get("SLACK_CHANNEL")
 
-    # Fall back to config file
+    # Fall back to config (channel) and secrets (webhook)
     if not webhook_url or not channel:
+        _migrate_secrets_from_config()
         config = _load_config_from_file()
-        webhook_url = webhook_url or config.get("slack_webhook_url")
+        secrets = _load_secrets()
+        webhook_url = webhook_url or secrets.get("slack_webhook_url")
         channel = channel or config.get("slack_channel")
 
     if webhook_url and channel:
@@ -207,8 +293,10 @@ def get_slack_status() -> dict:
     if env_channel:
         env_vars_set.append("SLACK_CHANNEL")
 
+    _migrate_secrets_from_config()
     config = _load_config_from_file()
-    config_webhook = config.get("slack_webhook_url")
+    secrets = _load_secrets()
+    config_webhook = secrets.get("slack_webhook_url")
     config_channel = config.get("slack_channel")
 
     # Determine source
@@ -231,30 +319,53 @@ def get_slack_status() -> dict:
 
 
 def delete_slack_config() -> bool:
-    """Remove Slack configuration from config file.
+    """Remove Slack configuration from config and secrets.
 
     Returns:
         True if Slack config was removed, False if it didn't exist
     """
     config = _load_config_from_file()
-    had_slack = "slack_webhook_url" in config or "slack_channel" in config
-    config.pop("slack_webhook_url", None)
+    secrets = _load_secrets()
+
+    had_channel = "slack_channel" in config
+    had_webhook = "slack_webhook_url" in secrets
+
     config.pop("slack_channel", None)
-    if had_slack:
+    if had_channel:
         _save_config(config)
-    return had_slack
+
+    secrets.pop("slack_webhook_url", None)
+    if had_webhook:
+        _save_secrets(secrets)
+
+    return had_channel or had_webhook
 
 
 def delete_credentials() -> bool:
-    """Delete config file if it exists.
+    """Delete credentials from config and secrets.
+
+    Removes email/subdomain from config.json and deletes secrets file.
 
     Returns:
-        True if config file was deleted, False if it didn't exist
+        True if credentials were deleted, False if nothing existed
     """
-    if CONFIG_PATH.exists():
-        CONFIG_PATH.unlink()
-        return True
-    return False
+    from zendesk_skill.crypto import delete_encrypted
+
+    deleted = False
+
+    # Remove non-secret credential fields from config
+    config = _load_config_from_file()
+    if "email" in config or "subdomain" in config:
+        config.pop("email", None)
+        config.pop("subdomain", None)
+        _save_config(config)
+        deleted = True
+
+    # Delete encrypted secrets file
+    if delete_encrypted(SECRETS_PATH):
+        deleted = True
+
+    return deleted
 
 
 def get_business_hours_config() -> dict | None:
@@ -365,14 +476,16 @@ def get_auth_status() -> dict:
 
     env_complete = all([env_email, env_token, env_subdomain])
 
-    # Check config file
+    # Check config file + secrets
     has_config_file = CONFIG_PATH.exists()
     config_complete = False
     if has_config_file:
+        _migrate_secrets_from_config()
         config = _load_config_from_file()
+        secrets = _load_secrets()
         config_complete = all([
             config.get("email"),
-            config.get("token"),
+            secrets.get("token"),
             config.get("subdomain"),
         ])
 

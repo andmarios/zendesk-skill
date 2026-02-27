@@ -294,7 +294,9 @@ def test_auth_subcommands_exist():
     assert "server-logout" in command_names
     assert "set-mode" in command_names
 
-    assert len(command_names) == 12
+    assert "set-oauth-client" in command_names
+
+    assert len(command_names) == 13
 
 
 def test_get_auth_status():
@@ -331,16 +333,23 @@ def test_get_auth_status():
                 os.environ[key] = value
 
 
-def test_save_and_delete_credentials():
+def test_save_and_delete_credentials(monkeypatch):
     """Test save_credentials and delete_credentials functions."""
-    from zendesk_skill.client import save_credentials, delete_credentials, CONFIG_PATH
+    from zendesk_skill.client import save_credentials, delete_credentials, CONFIG_PATH, SECRETS_PATH
     import os
+
+    # Disable encryption for this test so secrets are plaintext
+    monkeypatch.setenv("ZD_ENCRYPTION", "none")
 
     # Save original config if it exists
     original_config = None
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH) as f:
             original_config = f.read()
+    original_secrets = None
+    if SECRETS_PATH.exists():
+        with open(SECRETS_PATH) as f:
+            original_secrets = f.read()
 
     try:
         # Test save
@@ -352,19 +361,34 @@ def test_save_and_delete_credentials():
         mode = CONFIG_PATH.stat().st_mode & 0o777
         assert mode == 0o600
 
-        # Verify content
+        # Verify config content (email + subdomain, NOT token)
         with open(CONFIG_PATH) as f:
             config = json.load(f)
         assert config["email"] == "test@example.com"
-        assert config["token"] == "test_token"
         assert config["subdomain"] == "test_subdomain"
+        assert "token" not in config  # Token now in secrets
+
+        # Verify token is in secrets file
+        assert SECRETS_PATH.exists()
+        with open(SECRETS_PATH) as f:
+            secrets = json.load(f)
+        assert secrets["token"] == "test_token"
 
         # Test delete
         deleted = delete_credentials()
         assert deleted is True
-        assert not CONFIG_PATH.exists()
 
-        # Test delete when file doesn't exist
+        # Config may still exist (with encryption_salt etc.) but email/subdomain gone
+        if CONFIG_PATH.exists():
+            with open(CONFIG_PATH) as f:
+                config_after = json.load(f)
+            assert "email" not in config_after
+            assert "subdomain" not in config_after
+
+        # Secrets file should be gone
+        assert not SECRETS_PATH.exists()
+
+        # Test delete when nothing left to delete
         deleted_again = delete_credentials()
         assert deleted_again is False
 
@@ -375,6 +399,11 @@ def test_save_and_delete_credentials():
             with open(CONFIG_PATH, "w") as f:
                 f.write(original_config)
             CONFIG_PATH.chmod(0o600)
+        if original_secrets is not None:
+            SECRETS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(SECRETS_PATH, "w") as f:
+                f.write(original_secrets)
+            SECRETS_PATH.chmod(0o600)
 
 
 def test_auth_operations_exist():

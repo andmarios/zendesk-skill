@@ -87,9 +87,11 @@ def test_pkce_challenge_is_sha256_of_verifier():
     assert challenge == expected
 
 
-def test_oauth_token_save_and_load(tmp_path):
+def test_oauth_token_save_and_load(tmp_path, monkeypatch):
     """Test saving and loading OAuth tokens."""
     from zendesk_skill.auth.oauth import _save_oauth_token, _load_oauth_token
+
+    monkeypatch.setenv("ZD_ENCRYPTION", "none")
 
     token_path = tmp_path / "oauth_token.json"
     token_data = {
