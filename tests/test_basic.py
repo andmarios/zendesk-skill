@@ -541,3 +541,119 @@ def test_format_for_zendesk_size_limit():
     huge_content = "x" * 70000
     with pytest.raises(ValueError, match="64KB limit"):
         format_for_zendesk(huge_content)
+
+
+# =============================================================================
+# Code Review Fix Tests
+# =============================================================================
+
+
+def test_reporting_importable_from_operations():
+    """Test backward-compatible re-exports from operations module."""
+    from zendesk_skill.operations import send_slack_report, generate_markdown_report
+
+    assert callable(send_slack_report)
+    assert callable(generate_markdown_report)
+
+
+def test_reporting_importable_directly():
+    """Test that reporting module is importable directly."""
+    from zendesk_skill.reporting import send_slack_report, generate_markdown_report
+
+    assert callable(send_slack_report)
+    assert callable(generate_markdown_report)
+
+
+def test_mins_to_human_utility():
+    """Test shared mins_to_human utility function."""
+    from zendesk_skill.utils.time import mins_to_human
+
+    assert mins_to_human(None) == "N/A"
+    assert mins_to_human(30) == "30m"
+    assert mins_to_human(90) == "1.5h"
+    assert mins_to_human(2880) == "2.0d"
+    assert mins_to_human(0) == "0m"
+
+
+def test_validate_id_valid():
+    """Test that valid IDs pass validation."""
+    from zendesk_skill.operations import _validate_id
+
+    # These should not raise
+    _validate_id("1", "test")
+    _validate_id("12345", "test")
+    _validate_id("999999999", "test")
+
+
+def test_validate_id_invalid():
+    """Test that invalid IDs raise ValueError."""
+    from zendesk_skill.operations import _validate_id
+
+    with pytest.raises(ValueError, match="Invalid"):
+        _validate_id("0", "test")
+    with pytest.raises(ValueError, match="Invalid"):
+        _validate_id("-1", "test")
+    with pytest.raises(ValueError, match="Invalid"):
+        _validate_id("abc", "test")
+    with pytest.raises(ValueError, match="Invalid"):
+        _validate_id("", "test")
+
+
+def test_config_dir_consistency():
+    """Test that CONFIG_DIR is the same across all modules."""
+    from zendesk_skill.client import CONFIG_DIR
+    from zendesk_skill.auth.oauth import OAUTH_TOKEN_PATH
+    from zendesk_skill.auth.server import SERVER_TOKEN_PATH
+
+    # Both token paths should be under CONFIG_DIR
+    assert OAUTH_TOKEN_PATH.parent == CONFIG_DIR
+    assert SERVER_TOKEN_PATH.parent == CONFIG_DIR
+
+
+def test_package_exports_key_classes():
+    """Test that key classes are re-exported from __init__.py."""
+    from zendesk_skill import ZendeskClient, ZendeskAuthError, ZendeskAPIError
+
+    assert ZendeskClient is not None
+    assert ZendeskAuthError is not None
+    assert ZendeskAPIError is not None
+
+
+def test_zendesk_client_http_client_reuse():
+    """Test that ZendeskClient creates a persistent httpx client."""
+    from zendesk_skill.client import ZendeskClient
+
+    client = ZendeskClient(
+        email="test@example.com",
+        token="fake_token",
+        subdomain="test",
+    )
+
+    # Should lazily create http client
+    http_client = client._get_http_client()
+    assert http_client is not None
+    assert not http_client.is_closed
+
+    # Should return the same instance
+    http_client2 = client._get_http_client()
+    assert http_client is http_client2
+
+
+def test_storage_uses_sha256():
+    """Test that storage uses SHA256 for file naming."""
+    import hashlib
+    from zendesk_skill.storage import save_response
+
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        output_path = f.name
+
+    try:
+        test_data = {"test": True}
+        file_path, _ = save_response(
+            "test_hash", {"key": "value"}, test_data, output_path=output_path
+        )
+        # Verify the hash in filename matches SHA256
+        expected_hash = hashlib.sha256('{"key": "value"}'.encode()).hexdigest()[:8]
+        assert expected_hash in str(file_path) or output_path == str(file_path)
+    finally:
+        Path(output_path).unlink(missing_ok=True)

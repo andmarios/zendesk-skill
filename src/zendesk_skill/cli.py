@@ -457,13 +457,10 @@ def auth_set_mode_cmd(
 
     # Optionally save subdomain
     if subdomain:
-        import json
-        from zendesk_skill.client import CONFIG_DIR
-        config_path = CONFIG_DIR / "config.json"
+        from zendesk_skill.client import _save_config
         config = _load_config_from_file()
         config["subdomain"] = subdomain
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text(json.dumps(config, indent=2))
+        _save_config(config)
         result["subdomain"] = subdomain
 
     output_json(result)

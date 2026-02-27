@@ -17,11 +17,10 @@ from urllib.parse import urlencode
 import httpx
 
 from zendesk_skill.auth.scopes import DEFAULT_SCOPES
-from zendesk_skill.client import ZendeskAuthError, ZendeskAPIError, _load_config_from_file
+from zendesk_skill.auth.oauth import OAUTH_TOKEN_PATH
+from zendesk_skill.client import CONFIG_DIR, ZendeskAuthError, ZendeskAPIError, _load_config_from_file
 
 # Storage paths
-CONFIG_DIR = Path.home() / ".config" / "zd-cli"
-OAUTH_TOKEN_PATH = CONFIG_DIR / "oauth_token.json"
 SERVER_TOKEN_PATH = CONFIG_DIR / "server_token.json"
 
 

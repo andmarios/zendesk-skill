@@ -29,7 +29,7 @@ def _migrate_config_dir() -> None:
             print(f"[zd-cli] Warning: failed to migrate config: {e}", file=sys.stderr)
 
 
-_migrate_config_dir()
+_migration_done = False
 
 # Default timeout for API requests
 DEFAULT_TIMEOUT = 30.0
@@ -56,6 +56,10 @@ class ZendeskAPIError(ZendeskClientError):
 
 def _load_config_from_file() -> dict[str, str]:
     """Load configuration from config file."""
+    global _migration_done
+    if not _migration_done:
+        _migrate_config_dir()
+        _migration_done = True
     if CONFIG_PATH.exists():
         try:
             with open(CONFIG_PATH) as f:
@@ -484,6 +488,19 @@ class ZendeskClient:
 
         self.timeout = timeout
         self.base_url = f"https://{self._auth_provider.subdomain}.zendesk.com/api/v2"
+        self._http_client: httpx.AsyncClient | None = None
+
+    def _get_http_client(self) -> httpx.AsyncClient:
+        """Get or create the persistent HTTP client."""
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient()
+        return self._http_client
+
+    async def close(self) -> None:
+        """Close the persistent HTTP client."""
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
+            self._http_client = None
 
     def _get_headers(self) -> dict[str, str]:
         """Get headers for API requests."""
@@ -518,29 +535,29 @@ class ZendeskClient:
             ZendeskAPIError: On API errors
         """
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        client = self._get_http_client()
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.request(
-                    method=method,
-                    url=url,
-                    headers=self._get_headers(),
-                    params=params,
-                    json=json_data,
-                    timeout=timeout or self.timeout,
-                )
-                response.raise_for_status()
-                return response.json()
+        try:
+            response = await client.request(
+                method=method,
+                url=url,
+                headers=self._get_headers(),
+                params=params,
+                json=json_data,
+                timeout=timeout or self.timeout,
+            )
+            response.raise_for_status()
+            return response.json()
 
-            except httpx.HTTPStatusError as e:
-                error_msg = self._format_http_error(e)
-                raise ZendeskAPIError(error_msg, e.response.status_code) from e
-            except httpx.TimeoutException as e:
-                raise ZendeskAPIError(
-                    "Request timed out. The Zendesk API may be slow or unavailable."
-                ) from e
-            except httpx.RequestError as e:
-                raise ZendeskAPIError(f"Request failed: {e}") from e
+        except httpx.HTTPStatusError as e:
+            error_msg = self._format_http_error(e)
+            raise ZendeskAPIError(error_msg, e.response.status_code) from e
+        except httpx.TimeoutException as e:
+            raise ZendeskAPIError(
+                "Request timed out. The Zendesk API may be slow or unavailable."
+            ) from e
+        except httpx.RequestError as e:
+            raise ZendeskAPIError(f"Request failed: {e}") from e
 
     def _format_http_error(self, error: httpx.HTTPStatusError) -> str:
         """Format HTTP error into user-friendly message."""
@@ -627,12 +644,13 @@ class ZendeskClient:
         Raises:
             ZendeskAPIError: On download errors
         """
+        # Downloads need redirect-following, use a dedicated client
         async with httpx.AsyncClient(
             follow_redirects=True,
             max_redirects=MAX_REDIRECTS,
-        ) as client:
+        ) as download_client:
             try:
-                response = await client.get(
+                response = await download_client.get(
                     url,
                     headers=self._auth_provider.get_auth_headers(),
                     timeout=timeout or self.timeout,

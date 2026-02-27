@@ -114,10 +114,11 @@ def format_for_zendesk(
     else:
         html_content = markdown_to_html(content)
 
-    if len(html_content.encode("utf-8")) > MAX_CONTENT_SIZE:
+    encoded = html_content.encode("utf-8")
+    if len(encoded) > MAX_CONTENT_SIZE:
         raise ValueError(
             f"Content exceeds Zendesk's 64KB limit "
-            f"({len(html_content.encode('utf-8'))} bytes after conversion)"
+            f"({len(encoded)} bytes after conversion)"
         )
 
     return {"html_body": html_content}

@@ -18,10 +18,9 @@ from urllib.parse import urlencode, urlparse, parse_qs
 import httpx
 
 from zendesk_skill.auth.scopes import DEFAULT_SCOPES
-from zendesk_skill.client import ZendeskAuthError, ZendeskAPIError, _load_config_from_file, _save_config
+from zendesk_skill.client import CONFIG_DIR, ZendeskAuthError, ZendeskAPIError, _load_config_from_file, _save_config
 
 # Token storage path
-CONFIG_DIR = Path.home() / ".config" / "zd-cli"
 OAUTH_TOKEN_PATH = CONFIG_DIR / "oauth_token.json"
 
 # Loopback server config

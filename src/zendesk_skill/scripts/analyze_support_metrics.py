@@ -32,9 +32,8 @@ from pathlib import Path
 from statistics import mean, median
 from zoneinfo import ZoneInfo
 
-# Add parent to path to import client
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from zendesk_skill.client import get_business_hours_config
+from zendesk_skill.utils.time import mins_to_human
 
 
 def get_domain(email: str) -> str:
@@ -292,17 +291,6 @@ def detect_calls(comments: list) -> dict:
     }
 
 
-def mins_to_human(mins: float | None) -> str:
-    """Convert minutes to human-readable format."""
-    if mins is None:
-        return "N/A"
-    if mins < 60:
-        return f"{int(mins)}m"
-    elif mins < 1440:
-        return f"{mins/60:.1f}h"
-    else:
-        return f"{mins/1440:.1f}d"
-
 
 def fetch_ticket_metrics(ticket_ids: list[int], base_dir: Path, skill_dir: Path) -> dict[int, dict]:
     """Fetch ticket metrics for all tickets to get accurate reply counts and FRT.
@@ -342,7 +330,7 @@ def fetch_ticket_metrics(ticket_ids: list[int], base_dir: Path, skill_dir: Path)
 
         # Fetch from API
         result = subprocess.run(
-            ["uv", "run", "zendesk", "ticket-metrics", str(tid)],
+            ["uv", "run", "zd-cli", "ticket-metrics", str(tid)],
             capture_output=True, text=True, cwd=str(skill_dir)
         )
         if result.returncode == 0:
@@ -617,7 +605,7 @@ def main():
                 user_emails[rid] = user_data.get("data", {}).get("user", {}).get("email", "")
         else:
             result = subprocess.run(
-                ["uv", "run", "zendesk", "user", str(rid)],
+                ["uv", "run", "zd-cli", "user", str(rid)],
                 capture_output=True, text=True,
                 cwd=str(Path(__file__).parent.parent.parent.parent)
             )

@@ -32,11 +32,11 @@ def _get_storage_dir(ticket_id: str | None = None) -> Path:
 def _generate_filename(tool_name: str, params: dict[str, Any]) -> str:
     """Generate a unique filename for a response.
 
-    Format: {tool}_{md5_8chars}_{timestamp}.json
+    Format: {tool}_{sha256_8chars}_{timestamp}.json
     """
     # Create hash from parameters
     params_str = json.dumps(params, sort_keys=True)
-    hash_str = hashlib.md5(params_str.encode()).hexdigest()[:8]
+    hash_str = hashlib.sha256(params_str.encode()).hexdigest()[:8]
 
     # Unix timestamp
     timestamp = int(time.time())

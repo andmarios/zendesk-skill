@@ -14,17 +14,27 @@ zendesk-skill/
 │   └── search-syntax.md     # Zendesk search query reference
 ├── src/
 │   └── zendesk_skill/
-│       ├── __init__.py      # Package init with version
+│       ├── __init__.py      # Package init with key re-exports
 │       ├── cli.py           # Typer CLI with commands
 │       ├── client.py        # Zendesk API client (httpx-based)
 │       ├── formatting.py    # Markdown-to-HTML for write operations
+│       ├── operations.py    # Shared business logic (CLI + MCP server)
+│       ├── reporting.py     # Slack & Markdown report generation
+│       ├── server.py        # MCP server implementation
 │       ├── storage.py       # Response storage + structure extraction
 │       ├── queries.py       # jq query definitions
+│       ├── utils/           # Shared utilities
+│       │   ├── __init__.py
+│       │   ├── time.py      # Time formatting (mins_to_human)
+│       │   └── security.py  # Field wrapping for security
+│       ├── scripts/         # Standalone analysis scripts
+│       │   └── analyze_support_metrics.py
 │       └── auth/            # Pluggable auth backends
 │           ├── __init__.py  # Package exports
 │           ├── provider.py  # AuthProvider protocol + resolve factory
 │           ├── token_auth.py # Basic Auth (email + API token)
 │           ├── oauth.py     # OAuth 2.0 Authorization Code + PKCE
+│           ├── server.py    # Server-side OAuth token management
 │           └── scopes.py    # OAuth scope constants
 └── tests/
     ├── test_basic.py        # Basic + formatting tests
@@ -55,7 +65,7 @@ zendesk-skill/
 ### Storage (storage.py)
 - Saves all API responses to `/tmp/zendesk-skill/`
 - Auto-extracts response structure for metadata
-- File naming: `{command}_{md5_8}_{timestamp}.json`
+- File naming: `{command}_{sha256_8}_{timestamp}.json`
 
 ### Queries (queries.py)
 - Named jq queries per command type
