@@ -1038,7 +1038,7 @@ async def check_auth_status(validate: bool = True) -> dict:
     if not status["configured"]:
         result["guidance"] = (
             "No Zendesk credentials configured. Set up using:\n"
-            "1. CLI: zendesk auth login\n"
+            "1. CLI: zd-cli auth login\n"
             "2. Environment variables: ZENDESK_EMAIL, ZENDESK_TOKEN, ZENDESK_SUBDOMAIN\n"
             f"3. Config file: {status['config_path']}"
         )
@@ -1268,7 +1268,7 @@ async def send_slack_report(
         if not config:
             return {
                 "success": False,
-                "error": "Slack not configured. Run 'zendesk auth login-slack' first.",
+                "error": "Slack not configured. Run 'zd-cli auth login-slack' first.",
             }
         webhook_url = webhook_url or config[0]
         channel = channel or config[1]

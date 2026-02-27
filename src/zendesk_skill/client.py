@@ -8,8 +8,28 @@ from typing import Any
 
 import httpx
 
-# Config file location
-CONFIG_PATH = Path.home() / ".claude" / ".zendesk-skill" / "config.json"
+# Config directory and file locations
+CONFIG_DIR = Path.home() / ".config" / "zd-cli"
+CONFIG_PATH = CONFIG_DIR / "config.json"
+_LEGACY_CONFIG_DIR = Path.home() / ".claude" / ".zendesk-skill"
+
+
+def _migrate_config_dir() -> None:
+    """Migrate config from old ~/.claude/.zendesk-skill/ to new location."""
+    if _LEGACY_CONFIG_DIR.exists() and not CONFIG_DIR.exists():
+        import shutil
+        import sys
+        try:
+            shutil.copytree(_LEGACY_CONFIG_DIR, CONFIG_DIR)
+            print(
+                f"[zd-cli] Migrated config from {_LEGACY_CONFIG_DIR} to {CONFIG_DIR}",
+                file=sys.stderr,
+            )
+        except OSError as e:
+            print(f"[zd-cli] Warning: failed to migrate config: {e}", file=sys.stderr)
+
+
+_migrate_config_dir()
 
 # Default timeout for API requests
 DEFAULT_TIMEOUT = 30.0
@@ -369,6 +389,61 @@ def get_auth_status() -> dict:
         "env_vars_set": env_vars_set,
         "has_config_file": has_config_file,
     }
+
+
+def save_server_mode(
+    server_url: str,
+    server_provider: str | None = None,
+    subdomain: str | None = None,
+) -> dict:
+    """Save server mode configuration to config file.
+
+    Args:
+        server_url: URL of the auth relay server
+        server_provider: OAuth provider name on the server (optional)
+        subdomain: Zendesk subdomain (optional, for server mode)
+
+    Returns:
+        The updated config dict
+    """
+    config = _load_config_from_file()
+    config["mode"] = "server"
+    config["server_url"] = server_url
+    if server_provider:
+        config["server_provider"] = server_provider
+    if subdomain:
+        config["subdomain"] = subdomain
+    _save_config(config)
+    return config
+
+
+def get_server_config() -> dict:
+    """Get server mode configuration from environment or config file.
+
+    Returns:
+        Dict with mode, server_url, server_provider, and subdomain
+    """
+    config = _load_config_from_file()
+    return {
+        "mode": config.get("mode", "local"),
+        "server_url": os.environ.get("ZENDESK_SERVER_URL") or config.get("server_url"),
+        "server_provider": config.get("server_provider"),
+        "subdomain": os.environ.get("ZENDESK_SUBDOMAIN") or config.get("subdomain"),
+    }
+
+
+def clear_server_mode() -> dict:
+    """Remove server mode configuration from config file.
+
+    Returns:
+        The updated config dict
+    """
+    config = _load_config_from_file()
+    config.pop("mode", None)
+    config.pop("server_url", None)
+    config.pop("server_provider", None)
+    _save_config(config)
+    return config
 
 
 class ZendeskClient:

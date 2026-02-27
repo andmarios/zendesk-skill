@@ -6,12 +6,12 @@ when_to_use: When users ask about Zendesk tickets, support metrics, CSAT ratings
 
 # Zendesk CLI Skill
 
-A command-line interface for comprehensive Zendesk API integration. Run commands via `uv run zendesk <command>` in the skill directory.
+A command-line interface for comprehensive Zendesk API integration. Run commands via `uv run zd-cli <command>` in the skill directory.
 
 > **IMPORTANT: Always use `uv run`**
 >
 > All commands MUST be run with `uv run` to ensure dependencies are available:
-> - CLI commands: `uv run zendesk <command>`
+> - CLI commands: `uv run zd-cli <command>`
 > - Python scripts: `uv run python src/zendesk_skill/scripts/<script>.py`
 >
 > Never use `python3` or `python` directly - it will fail with `ModuleNotFoundError`.
@@ -20,16 +20,16 @@ A command-line interface for comprehensive Zendesk API integration. Run commands
 
 ```bash
 # Test authentication
-uv run zendesk me
+uv run zd-cli me
 
 # Search tickets
-uv run zendesk search "status:open priority:urgent"
+uv run zd-cli search "status:open priority:urgent"
 
 # Get ticket details
-uv run zendesk ticket-details 12345
+uv run zd-cli ticket-details 12345
 
 # Query saved response (path shown in command output)
-uv run zendesk query <temp>/zendesk-skill/ticket_details_xxx.json -q comments_slim
+uv run zd-cli query <temp>/zendesk-skill/ticket_details_xxx.json -q comments_slim
 ```
 
 ## Key Concepts
@@ -43,9 +43,9 @@ All API responses are automatically saved to `<temp>/zendesk-skill/` (system tem
 - **Data**: Full API response
 
 **Workflow pattern:**
-1. Run a command (e.g., `uv run zendesk ticket-details 12345`)
+1. Run a command (e.g., `uv run zd-cli ticket-details 12345`)
 2. Response saved to a JSON file (path shown in output)
-3. Use `uv run zendesk query <file> -q <query_name>` to extract specific data
+3. Use `uv run zd-cli query <file> -q <query_name>` to extract specific data
 4. Avoid re-fetching - work with stored files
 
 ### Why This Matters
@@ -61,11 +61,11 @@ Zendesk API responses can be very large (comments with HTML, many custom fields)
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `search` | Search tickets with query | `uv run zendesk search "status:open"` |
-| `ticket` | Get ticket by ID | `uv run zendesk ticket 12345` |
-| `ticket-details` | Get ticket + all comments | `uv run zendesk ticket-details 12345` |
-| `linked-incidents` | Get incidents linked to problem | `uv run zendesk linked-incidents 12345` |
-| `attachment` | Download attachment file | `uv run zendesk attachment --ticket 12345 <url>` |
+| `search` | Search tickets with query | `uv run zd-cli search "status:open"` |
+| `ticket` | Get ticket by ID | `uv run zd-cli ticket 12345` |
+| `ticket-details` | Get ticket + all comments | `uv run zd-cli ticket-details 12345` |
+| `linked-incidents` | Get incidents linked to problem | `uv run zd-cli linked-incidents 12345` |
+| `attachment` | Download attachment file | `uv run zd-cli attachment --ticket 12345 <url>` |
 
 ### Write Operations
 
@@ -73,71 +73,71 @@ All write commands (`create-ticket`, `add-note`, `add-comment`) support **Markdo
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `update-ticket` | Update ticket properties | `uv run zendesk update-ticket 12345 --status pending` |
-| `create-ticket` | Create new ticket (Markdown) | `uv run zendesk create-ticket "Subject" "**Bold** description"` |
-| `add-note` | Add internal note (Markdown) | `uv run zendesk add-note 12345 "**Investigation:** found the issue"` |
-| `add-comment` | Add public comment (Markdown) | `uv run zendesk add-comment 12345 "Here are the steps:\n- Step 1\n- Step 2"` |
+| `update-ticket` | Update ticket properties | `uv run zd-cli update-ticket 12345 --status pending` |
+| `create-ticket` | Create new ticket (Markdown) | `uv run zd-cli create-ticket "Subject" "**Bold** description"` |
+| `add-note` | Add internal note (Markdown) | `uv run zd-cli add-note 12345 "**Investigation:** found the issue"` |
+| `add-comment` | Add public comment (Markdown) | `uv run zd-cli add-comment 12345 "Here are the steps:\n- Step 1\n- Step 2"` |
 
 ### Metrics & Analytics
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `ticket-metrics` | Get reply/resolution times | `uv run zendesk ticket-metrics 12345` |
-| `list-metrics` | List metrics for tickets | `uv run zendesk list-metrics` |
-| `satisfaction-ratings` | List CSAT ratings | `uv run zendesk satisfaction-ratings --score bad` |
-| `satisfaction-rating` | Get single rating | `uv run zendesk satisfaction-rating 67890` |
+| `ticket-metrics` | Get reply/resolution times | `uv run zd-cli ticket-metrics 12345` |
+| `list-metrics` | List metrics for tickets | `uv run zd-cli list-metrics` |
+| `satisfaction-ratings` | List CSAT ratings | `uv run zd-cli satisfaction-ratings --score bad` |
+| `satisfaction-rating` | Get single rating | `uv run zd-cli satisfaction-rating 67890` |
 
 ### Views (Queue Management)
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `views` | List available views | `uv run zendesk views` |
-| `view-count` | Get ticket count | `uv run zendesk view-count 123` |
-| `view-tickets` | Get tickets from view | `uv run zendesk view-tickets 123` |
+| `views` | List available views | `uv run zd-cli views` |
+| `view-count` | Get ticket count | `uv run zd-cli view-count 123` |
+| `view-tickets` | Get tickets from view | `uv run zd-cli view-tickets 123` |
 
 ### Users & Organizations
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `user` | Get user by ID | `uv run zendesk user 12345` |
-| `search-users` | Search users | `uv run zendesk search-users "john@example.com"` |
-| `org` | Get organization by ID | `uv run zendesk org 67890` |
-| `search-orgs` | Search organizations | `uv run zendesk search-orgs "Acme"` |
+| `user` | Get user by ID | `uv run zd-cli user 12345` |
+| `search-users` | Search users | `uv run zd-cli search-users "john@example.com"` |
+| `org` | Get organization by ID | `uv run zd-cli org 67890` |
+| `search-orgs` | Search organizations | `uv run zd-cli search-orgs "Acme"` |
 
 ### Authentication
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `auth login` | Configure Zendesk API token credentials | `uv run zendesk auth login` |
-| `auth login-oauth` | OAuth 2.0 login (opens browser) | `uv run zendesk auth login-oauth --subdomain co` |
-| `auth status` | Check auth configuration (token + OAuth) | `uv run zendesk auth status` |
-| `auth logout` | Remove API token credentials | `uv run zendesk auth logout` |
-| `auth logout-oauth` | Remove OAuth token | `uv run zendesk auth logout-oauth` |
-| `auth login-slack` | Configure Slack webhook | `uv run zendesk auth login-slack` |
-| `auth status-slack` | Check Slack configuration | `uv run zendesk auth status-slack` |
-| `auth logout-slack` | Remove Slack configuration | `uv run zendesk auth logout-slack` |
+| `auth login` | Configure Zendesk API token credentials | `uv run zd-cli auth login` |
+| `auth login-oauth` | OAuth 2.0 login (opens browser) | `uv run zd-cli auth login-oauth --subdomain co` |
+| `auth status` | Check auth configuration (token + OAuth) | `uv run zd-cli auth status` |
+| `auth logout` | Remove API token credentials | `uv run zd-cli auth logout` |
+| `auth logout-oauth` | Remove OAuth token | `uv run zd-cli auth logout-oauth` |
+| `auth login-slack` | Configure Slack webhook | `uv run zd-cli auth login-slack` |
+| `auth status-slack` | Check Slack configuration | `uv run zd-cli auth status-slack` |
+| `auth logout-slack` | Remove Slack configuration | `uv run zd-cli auth logout-slack` |
 
 ### Slack Integration
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `slack-report` | Send support report to Slack | `uv run zendesk slack-report [analysis_file]` |
-| `markdown-report` | Generate detailed markdown report | `uv run zendesk markdown-report [analysis_file] -o report.md` |
+| `slack-report` | Send support report to Slack | `uv run zd-cli slack-report [analysis_file]` |
+| `markdown-report` | Generate detailed markdown report | `uv run zd-cli markdown-report [analysis_file] -o report.md` |
 
 ### Configuration
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `groups` | List support groups | `uv run zendesk groups` |
-| `tags` | List popular tags | `uv run zendesk tags` |
-| `sla-policies` | List SLA policies | `uv run zendesk sla-policies` |
-| `me` | Get current user (test auth) | `uv run zendesk me` |
+| `groups` | List support groups | `uv run zd-cli groups` |
+| `tags` | List popular tags | `uv run zd-cli tags` |
+| `sla-policies` | List SLA policies | `uv run zd-cli sla-policies` |
+| `me` | Get current user (test auth) | `uv run zd-cli me` |
 
 ### Query Tool
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `query` | Query saved JSON with jq | `uv run zendesk query <file> -q comments_slim` |
+| `query` | Query saved JSON with jq | `uv run zd-cli query <file> -q comments_slim` |
 
 ## Search Query Syntax
 
@@ -200,7 +200,7 @@ requester:*@bigclient.com status:open
 
 ## Named Queries for jq
 
-After fetching data, use `zendesk query` with these named queries:
+After fetching data, use `zd-cli query` with these named queries:
 
 ### For Ticket Details (`ticket-details`)
 | Query | Description |
@@ -224,18 +224,18 @@ After fetching data, use `zendesk query` with these named queries:
 ### Custom jq Examples
 ```bash
 # Get specific fields from ticket
-uv run zendesk query file.json --jq '.data.ticket | {id, subject, status, tags}'
+uv run zd-cli query file.json --jq '.data.ticket | {id, subject, status, tags}'
 
 # Filter comments by author
-uv run zendesk query file.json --jq '[.data.comments[] | select(.author_id == 12345)]'
+uv run zd-cli query file.json --jq '[.data.comments[] | select(.author_id == 12345)]'
 
 # Get timestamps only
-uv run zendesk query file.json --jq '.data.comments | map({created_at, author_id})'
+uv run zd-cli query file.json --jq '.data.comments | map({created_at, author_id})'
 ```
 
 ### List Available Queries
 ```bash
-uv run zendesk query <file_path> --list
+uv run zd-cli query <file_path> --list
 ```
 
 ## Common Workflows
@@ -244,66 +244,66 @@ uv run zendesk query <file_path> --list
 
 ```bash
 # 1. Get full ticket details
-uv run zendesk ticket-details 12345
+uv run zd-cli ticket-details 12345
 # -> Output includes: file_path (e.g., "<temp>/zendesk-skill/12345/ticket_details_xxx.json")
 
 # 2. Get ticket summary (use the file_path from step 1)
-uv run zendesk query <file_path> -q ticket_summary
+uv run zd-cli query <file_path> -q ticket_summary
 
 # 3. Get conversation (truncated bodies)
-uv run zendesk query <file_path> -q comments_slim
+uv run zd-cli query <file_path> -q comments_slim
 
 # 4. Check for attachments
-uv run zendesk query <file_path> -q attachments
+uv run zd-cli query <file_path> -q attachments
 ```
 
 ### Find Related Tickets
 
 ```bash
 # Find all open tickets from same requester
-uv run zendesk search "requester:user@example.com status:open"
+uv run zd-cli search "requester:user@example.com status:open"
 
 # If it's a problem ticket, find linked incidents
-uv run zendesk linked-incidents 12345
+uv run zd-cli linked-incidents 12345
 ```
 
 ### Check Queue Health
 
 ```bash
 # Get available views
-uv run zendesk views
+uv run zd-cli views
 
 # Check ticket count in queue
-uv run zendesk view-count 123
+uv run zd-cli view-count 123
 
 # Get tickets to triage
-uv run zendesk view-tickets 123
+uv run zd-cli view-tickets 123
 ```
 
 ### Analyze CSAT
 
 ```bash
 # Find negative ratings
-uv run zendesk satisfaction-ratings --score bad
+uv run zd-cli satisfaction-ratings --score bad
 
 # Query for details (use file_path from command output)
-uv run zendesk query <file_path> --jq '.data.satisfaction_ratings | map({ticket_id, score, comment})'
+uv run zd-cli query <file_path> --jq '.data.satisfaction_ratings | map({ticket_id, score, comment})'
 
 # Investigate specific case
-uv run zendesk ticket-details <ticket_id>
+uv run zd-cli ticket-details <ticket_id>
 ```
 
 ### Update Ticket Status
 
 ```bash
 # Change status and add tag
-uv run zendesk update-ticket 12345 --status pending --tags "waiting-customer,tier2"
+uv run zd-cli update-ticket 12345 --status pending --tags "waiting-customer,tier2"
 
 # Add internal note with Markdown formatting
-uv run zendesk add-note 12345 "**Escalated** to tier 2, waiting for response.\n\n- Root cause: config mismatch\n- Next steps: awaiting customer confirmation"
+uv run zd-cli add-note 12345 "**Escalated** to tier 2, waiting for response.\n\n- Root cause: config mismatch\n- Next steps: awaiting customer confirmation"
 
 # Add plain text note (no Markdown conversion)
-uv run zendesk add-note 12345 "Simple plain text note" --plain-text
+uv run zd-cli add-note 12345 "Simple plain text note" --plain-text
 ```
 
 ## Command Options
@@ -317,7 +317,7 @@ All commands support:
 ### Search Options
 
 ```bash
-uv run zendesk search "query" [OPTIONS]
+uv run zd-cli search "query" [OPTIONS]
   --page, -p INT       Page number (default: 1)
   --per-page, -n INT   Results per page (default: 25, max: 100)
   --sort, -s TEXT      Sort field
@@ -327,7 +327,7 @@ uv run zendesk search "query" [OPTIONS]
 ### Update Ticket Options
 
 ```bash
-uv run zendesk update-ticket TICKET_ID [OPTIONS]
+uv run zd-cli update-ticket TICKET_ID [OPTIONS]
   --status, -s TEXT     New status (open, pending, solved, closed)
   --priority, -p TEXT   New priority (low, normal, high, urgent)
   --assignee, -a TEXT   Assignee ID
@@ -339,7 +339,7 @@ uv run zendesk update-ticket TICKET_ID [OPTIONS]
 ### Satisfaction Ratings Options
 
 ```bash
-uv run zendesk satisfaction-ratings [OPTIONS]
+uv run zd-cli satisfaction-ratings [OPTIONS]
   --score, -s TEXT      Filter: good, bad, offered, unoffered
   --start TEXT          Start time (Unix timestamp)
   --end TEXT            End time (Unix timestamp)
@@ -348,7 +348,7 @@ uv run zendesk satisfaction-ratings [OPTIONS]
 ### Attachment Options
 
 ```bash
-uv run zendesk attachment [OPTIONS] URL
+uv run zd-cli attachment [OPTIONS] URL
   --ticket, -t TEXT     Ticket ID (organizes download under ticket folder)
   --output, -o PATH     Custom output path (overrides --ticket)
 ```
@@ -361,12 +361,12 @@ Output paths are determined in this order:
 
 1. **`--output PATH`** - Full custom path (highest priority)
    ```bash
-   uv run zendesk ticket 12345 --output ./my-ticket.json
+   uv run zd-cli ticket 12345 --output ./my-ticket.json
    ```
 
 2. **`--ticket ID`** - Organizes files under `<temp>/zendesk-skill/{ticket_id}/`
    ```bash
-   uv run zendesk attachment --ticket 12345 <url>
+   uv run zd-cli attachment --ticket 12345 <url>
    # -> <temp>/zendesk-skill/12345/attachments/filename.png
    ```
 
@@ -408,7 +408,7 @@ Two authentication methods are supported. Both can coexist — OAuth takes prior
 Requires an OAuth client configured in Zendesk Admin Center with redirect URL `http://127.0.0.1:8080/callback`.
 
 ```bash
-uv run zendesk auth login-oauth --subdomain yourcompany --client-id YOUR_ID --client-secret YOUR_SECRET
+uv run zd-cli auth login-oauth --subdomain yourcompany --client-id YOUR_ID --client-secret YOUR_SECRET
 ```
 
 Opens a browser for authorization. For headless environments, add `--manual` to paste the code instead.
@@ -416,14 +416,14 @@ Opens a browser for authorization. For headless environments, add `--manual` to 
 #### Option B: API Token (interactive)
 
 ```bash
-uv run zendesk auth login
+uv run zd-cli auth login
 # Prompts for email, token (hidden), and subdomain
 ```
 
 #### Option C: API Token (non-interactive)
 
 ```bash
-uv run zendesk auth login --email "your@email.com" --token "your-token" --subdomain "yourcompany"
+uv run zd-cli auth login --email "your@email.com" --token "your-token" --subdomain "yourcompany"
 ```
 
 #### Option D: Environment Variables
@@ -443,40 +443,40 @@ export ZENDESK_SUBDOMAIN="yourcompany"
 #### Check Auth Status
 
 ```bash
-uv run zendesk auth status
+uv run zd-cli auth status
 ```
 
 #### Verify Auth Works
 
 ```bash
-uv run zendesk me
+uv run zd-cli me
 ```
 
 #### Remove Credentials
 
 ```bash
-uv run zendesk auth logout       # Remove API token
-uv run zendesk auth logout-oauth  # Remove OAuth token
+uv run zd-cli auth logout       # Remove API token
+uv run zd-cli auth logout-oauth  # Remove OAuth token
 ```
 
 ## Notes for Claude Code Users
 
 ### Interactive Authentication
 
-The `zendesk auth login` command supports both interactive and non-interactive modes:
+The `zd-cli auth login` command supports both interactive and non-interactive modes:
 
 - **Interactive mode**: Prompts for credentials securely (password hidden). This requires running in the user's terminal.
 - **Non-interactive mode**: Pass credentials via flags for automation:
   ```bash
-  uv run zendesk auth login --email "you@example.com" --token "your-token" --subdomain "company"
+  uv run zd-cli auth login --email "you@example.com" --token "your-token" --subdomain "company"
   ```
 
 ### When Auth Is Not Configured
 
-If credentials are not configured, commands will fail with a helpful error message. The `zendesk auth status` command provides detailed guidance:
+If credentials are not configured, commands will fail with a helpful error message. The `zd-cli auth status` command provides detailed guidance:
 
 ```bash
-uv run zendesk auth status
+uv run zd-cli auth status
 ```
 
 If not configured, it will show:
@@ -490,10 +490,10 @@ Before running Zendesk commands for a user, it's helpful to verify auth status f
 
 ```bash
 # Quick auth check
-uv run zendesk auth status
+uv run zd-cli auth status
 
 # If configured, test it works
-uv run zendesk me
+uv run zd-cli me
 ```
 
 ## Slack Integration
@@ -504,10 +504,10 @@ Configure Slack to receive support reports:
 
 ```bash
 # Interactive mode
-uv run zendesk auth login-slack
+uv run zd-cli auth login-slack
 
 # Non-interactive mode
-uv run zendesk auth login-slack --webhook "https://hooks.slack.com/services/..." --channel "#support-reports"
+uv run zd-cli auth login-slack --webhook "https://hooks.slack.com/services/..." --channel "#support-reports"
 ```
 
 **Getting a Webhook URL:**
@@ -520,13 +520,13 @@ uv run zendesk auth login-slack --webhook "https://hooks.slack.com/services/..."
 
 ```bash
 # Send most recent analysis to configured channel
-uv run zendesk slack-report
+uv run zd-cli slack-report
 
 # Send specific analysis file
-uv run zendesk slack-report /path/to/support_analysis.json
+uv run zd-cli slack-report /path/to/support_analysis.json
 
 # Override channel
-uv run zendesk slack-report --channel "#different-channel"
+uv run zd-cli slack-report --channel "#different-channel"
 ```
 
 ### Report Content
@@ -557,17 +557,17 @@ Generate a comprehensive support report with tickets per customer, messages per 
 
 ```bash
 # 1. Search for tickets in time range
-uv run zendesk search "created>2024-12-22 created<2025-01-22"
+uv run zd-cli search "created>2024-12-22 created<2025-01-22"
 
 # 2. Get ticket details for each result (for message analysis)
-for ticket_id in $(uv run zendesk query <search_file> -q ids_only | jq -r '.[]'); do
-  uv run zendesk ticket-details $ticket_id
+for ticket_id in $(uv run zd-cli query <search_file> -q ids_only | jq -r '.[]'); do
+  uv run zd-cli ticket-details $ticket_id
 done
 
 # 3. Run analysis queries on stored data
-uv run zendesk query <ticket_details_file> -q conversation_stats
-uv run zendesk query <ticket_details_file> -q call_mentions
-uv run zendesk query <search_file> -q by_requester
+uv run zd-cli query <ticket_details_file> -q conversation_stats
+uv run zd-cli query <ticket_details_file> -q call_mentions
+uv run zd-cli query <search_file> -q by_requester
 ```
 
 ### Available Analytics Queries
@@ -614,10 +614,10 @@ Customers are identified by:
 To get organization info:
 ```bash
 # Get user with organization
-uv run zendesk user <user_id>
+uv run zd-cli user <user_id>
 
 # Get organization details
-uv run zendesk org <org_id>
+uv run zd-cli org <org_id>
 ```
 
 ### Python Analysis Script
@@ -656,5 +656,5 @@ This generates:
 2. **Use named queries first**: They're optimized for common patterns
 3. **Combine queries**: Run multiple jq queries on same file for different views
 4. **Watch for pagination**: Search results may have more pages - check `next_page` in output
-5. **Test auth first**: Use `uv run zendesk me` to verify credentials work
-6. **Use --help**: All commands have detailed help: `uv run zendesk search --help`
+5. **Test auth first**: Use `uv run zd-cli me` to verify credentials work
+6. **Use --help**: All commands have detailed help: `uv run zd-cli search --help`

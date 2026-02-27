@@ -60,7 +60,7 @@ class AuthProvider(Protocol):
 - Token: `https://{subdomain}.zendesk.com/oauth/tokens`
 
 **Loopback flow (desktop):**
-1. User runs `zendesk auth login-oauth`
+1. User runs `zd-cli auth login-oauth`
 2. Load OAuth client credentials (env vars or config)
 3. Generate PKCE code_verifier + code_challenge (SHA256)
 4. Start local HTTP server on `127.0.0.1` port 8080-8099
@@ -91,7 +91,7 @@ Broad scopes for personal CLI tool. Granular scopes deferred to relay server wor
 ### Token Storage
 
 ```
-~/.claude/.zendesk-skill/
+~/.config/zd-cli/
 ├── config.json             # Extended with: oauth_client_id, oauth_client_secret
 └── oauth_token.json        # NEW: access_token, refresh_token, expires_at, token_type, scope
 ```
@@ -112,11 +112,11 @@ Singleton `get_client()` calls `resolve_auth_provider()`.
 ### CLI Changes
 
 New commands under existing `auth` group:
-- `zendesk auth login-oauth` — Run OAuth flow (requires subdomain + client credentials)
-- `zendesk auth logout-oauth` — Delete OAuth token file
+- `zd-cli auth login-oauth` — Run OAuth flow (requires subdomain + client credentials)
+- `zd-cli auth logout-oauth` — Delete OAuth token file
 
 Enhanced:
-- `zendesk auth status` — Show both OAuth and token auth status
+- `zd-cli auth status` — Show both OAuth and token auth status
 
 Existing `auth login` / `auth logout` unchanged.
 

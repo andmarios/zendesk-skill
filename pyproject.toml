@@ -18,7 +18,7 @@ dependencies = [
 prompt-security-utils = { git = "https://github.com/andmarios/prompt-security-utils" }
 
 [project.scripts]
-zendesk = "zendesk_skill.cli:main_cli"
+zd-cli = "zendesk_skill.cli:main_cli"
 zendesk-mcp = "zendesk_skill.server:main"
 
 [build-system]

@@ -11,7 +11,7 @@ def test_import_cli():
     """Test that the CLI module can be imported."""
     from zendesk_skill.cli import app
 
-    assert app.info.name == "zendesk"
+    assert app.info.name == "zd-cli"
 
 
 def test_cli_has_commands():
@@ -288,7 +288,13 @@ def test_auth_subcommands_exist():
     assert "login-oauth" in command_names
     assert "logout-oauth" in command_names
 
-    assert len(command_names) == 8
+    # Server auth commands
+    assert "server-login" in command_names
+    assert "server-status" in command_names
+    assert "server-logout" in command_names
+    assert "set-mode" in command_names
+
+    assert len(command_names) == 12
 
 
 def test_get_auth_status():

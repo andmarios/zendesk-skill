@@ -39,7 +39,7 @@ See [Authentication Setup](#authentication-setup) below.
 
 ```bash
 cd ~/.claude/skills/zendesk-skill
-uv run zendesk me
+uv run zd-cli me
 ```
 
 ## Authentication Setup
@@ -65,10 +65,10 @@ Uses OAuth 2.0 Authorization Code with PKCE. Tokens auto-refresh when expired.
 **Login:**
 
 ```bash
-uv run zendesk auth login-oauth --subdomain yourcompany --client-id YOUR_ID --client-secret YOUR_SECRET
+uv run zd-cli auth login-oauth --subdomain yourcompany --client-id YOUR_ID --client-secret YOUR_SECRET
 ```
 
-A browser window opens for authorization. After approving, the token is saved to `~/.claude/.zendesk-skill/oauth_token.json`.
+A browser window opens for authorization. After approving, the token is saved to `~/.config/zd-cli/oauth_token.json`.
 
 For headless environments, add `--manual` to paste the authorization code instead.
 
@@ -87,7 +87,7 @@ Uses Basic Auth with email + API token.
 **Option A: Interactive Setup**
 
 ```bash
-uv run zendesk auth login
+uv run zd-cli auth login
 ```
 
 **Option B: Environment Variables**
@@ -100,7 +100,7 @@ export ZENDESK_SUBDOMAIN="yourcompany"
 
 **Option C: Config File**
 
-Create `~/.claude/.zendesk-skill/config.json`:
+Create `~/.config/zd-cli/config.json`:
 
 ```json
 {
@@ -113,13 +113,13 @@ Create `~/.claude/.zendesk-skill/config.json`:
 ### Verify Authentication
 
 ```bash
-uv run zendesk auth status
-uv run zendesk me
+uv run zd-cli auth status
+uv run zd-cli me
 ```
 
 ## Configuration
 
-All settings are stored in `~/.claude/.zendesk-skill/config.json`.
+All settings are stored in `~/.config/zd-cli/config.json`.
 
 ### Full Configuration Reference
 
@@ -159,16 +159,16 @@ Send formatted support reports to Slack channels.
 
 ```bash
 # Interactive setup
-uv run zendesk slack-auth
+uv run zd-cli slack-auth
 
 # Or manually configure
-uv run zendesk slack-auth --webhook-url "https://hooks.slack.com/services/..." --channel "#support"
+uv run zd-cli slack-auth --webhook-url "https://hooks.slack.com/services/..." --channel "#support"
 
 # Send a report
-uv run python src/zendesk_skill/scripts/analyze_support_metrics.py | uv run zendesk slack-report
+uv run python src/zendesk_skill/scripts/analyze_support_metrics.py | uv run zd-cli slack-report
 
 # Check status
-uv run zendesk slack-status
+uv run zd-cli slack-status
 ```
 
 ### Business Hours & On-Call
@@ -195,7 +195,7 @@ Prompt injection protection uses a two-tier configuration model:
 
 | Layer | Config file | Controls |
 |-------|-------------|----------|
-| **This skill** | `~/.claude/.zendesk-skill/config.json` | What to protect (toggles, allowlists) |
+| **This skill** | `~/.config/zd-cli/config.json` | What to protect (toggles, allowlists) |
 | **Shared library** | `~/.claude/.prompt-security/config.json` | How to protect (markers, detection, LLM screening) |
 
 #### Skill-level settings (config.json)
@@ -238,7 +238,7 @@ With security disabled, content fields are plain strings.
 ### Running the Server
 
 ```bash
-uv run zendesk-mcp
+uv run zd-cli-mcp
 ```
 
 ### Claude Desktop Configuration
@@ -296,76 +296,76 @@ The skill saves API responses locally and uses jq for efficient extraction:
 
 ```bash
 # 1. Fetch ticket details
-uv run zendesk ticket-details 12345
+uv run zd-cli ticket-details 12345
 # -> Output: file_path: "/tmp/zendesk-skill/ticket_details_xxx.json"
 
 # 2. Extract just comment bodies
-uv run zendesk query /tmp/zendesk-skill/ticket_details_xxx.json -q comments_slim
+uv run zd-cli query /tmp/zendesk-skill/ticket_details_xxx.json -q comments_slim
 
 # 3. List attachments if needed
-uv run zendesk query /tmp/zendesk-skill/ticket_details_xxx.json -q attachments
+uv run zd-cli query /tmp/zendesk-skill/ticket_details_xxx.json -q attachments
 
 # 4. Download an attachment (organized by ticket)
-uv run zendesk attachment --ticket 12345 "https://..."
+uv run zd-cli attachment --ticket 12345 "https://..."
 ```
 
 ## Commands
 
 ### Ticket Operations
-- `zendesk search` - Search with Zendesk query syntax
-- `zendesk ticket` - Get ticket by ID
-- `zendesk ticket-details` - Get ticket with all comments
-- `zendesk linked-incidents` - Get linked incidents
-- `zendesk attachment` - Download attachment (supports `--ticket` for organization)
+- `zd-cli search` - Search with Zendesk query syntax
+- `zd-cli ticket` - Get ticket by ID
+- `zd-cli ticket-details` - Get ticket with all comments
+- `zd-cli linked-incidents` - Get linked incidents
+- `zd-cli attachment` - Download attachment (supports `--ticket` for organization)
 
 ### Write Operations
 
 All write commands support **Markdown formatting** by default (converted to HTML via `html_body`). Use `--plain-text` to send as plain text instead.
 
-- `zendesk update-ticket` - Update ticket properties
-- `zendesk create-ticket` - Create new ticket (Markdown supported)
-- `zendesk add-note` - Add internal note (Markdown supported)
-- `zendesk add-comment` - Add public comment (Markdown supported)
+- `zd-cli update-ticket` - Update ticket properties
+- `zd-cli create-ticket` - Create new ticket (Markdown supported)
+- `zd-cli add-note` - Add internal note (Markdown supported)
+- `zd-cli add-comment` - Add public comment (Markdown supported)
 
 ### Metrics & Analytics
-- `zendesk ticket-metrics` - Get ticket metrics
-- `zendesk list-metrics` - List metrics
-- `zendesk satisfaction-ratings` - List CSAT ratings
-- `zendesk satisfaction-rating` - Get single rating
+- `zd-cli ticket-metrics` - Get ticket metrics
+- `zd-cli list-metrics` - List metrics
+- `zd-cli satisfaction-ratings` - List CSAT ratings
+- `zd-cli satisfaction-rating` - Get single rating
 
 ### Views
-- `zendesk views` - List available views
-- `zendesk view-count` - Get view ticket count
-- `zendesk view-tickets` - Get tickets from view
+- `zd-cli views` - List available views
+- `zd-cli view-count` - Get view ticket count
+- `zd-cli view-tickets` - Get tickets from view
 
 ### Users & Organizations
-- `zendesk user` - Get user by ID
-- `zendesk search-users` - Search users
-- `zendesk org` - Get organization by ID
-- `zendesk search-orgs` - Search organizations
+- `zd-cli user` - Get user by ID
+- `zd-cli search-users` - Search users
+- `zd-cli org` - Get organization by ID
+- `zd-cli search-orgs` - Search organizations
 
 ### Configuration
-- `zendesk groups` - List support groups
-- `zendesk tags` - List popular tags
-- `zendesk sla-policies` - List SLA policies
-- `zendesk me` - Test authentication
+- `zd-cli groups` - List support groups
+- `zd-cli tags` - List popular tags
+- `zd-cli sla-policies` - List SLA policies
+- `zd-cli me` - Test authentication
 
 ### Authentication
-- `zendesk auth login` - Interactive API token setup
-- `zendesk auth login-oauth` - OAuth 2.0 login (browser flow)
-- `zendesk auth status` - Check auth configuration
-- `zendesk auth logout` - Remove API token credentials
-- `zendesk auth logout-oauth` - Remove OAuth token
+- `zd-cli auth login` - Interactive API token setup
+- `zd-cli auth login-oauth` - OAuth 2.0 login (browser flow)
+- `zd-cli auth status` - Check auth configuration
+- `zd-cli auth logout` - Remove API token credentials
+- `zd-cli auth logout-oauth` - Remove OAuth token
 
 ### Slack Integration
-- `zendesk slack-auth` - Configure Slack webhook
-- `zendesk slack-status` - Check Slack configuration
-- `zendesk slack-delete` - Remove Slack configuration
-- `zendesk slack-report` - Send report to Slack (reads JSON from stdin)
-- `zendesk markdown-report` - Generate detailed markdown report (stdout or file)
+- `zd-cli slack-auth` - Configure Slack webhook
+- `zd-cli slack-status` - Check Slack configuration
+- `zd-cli slack-delete` - Remove Slack configuration
+- `zd-cli slack-report` - Send report to Slack (reads JSON from stdin)
+- `zd-cli markdown-report` - Generate detailed markdown report (stdout or file)
 
 ### Utility
-- `zendesk query` - Query saved files with jq
+- `zd-cli query` - Query saved files with jq
 
 ## Support Metrics Analysis
 
@@ -387,13 +387,13 @@ uv run python src/zendesk_skill/scripts/analyze_support_metrics.py --include-unt
 
 # Pipe to Slack
 uv run python src/zendesk_skill/scripts/analyze_support_metrics.py | \
-  uv run zendesk slack-report
+  uv run zd-cli slack-report
 
 # Generate detailed markdown report
-uv run zendesk markdown-report -o support_report.md
+uv run zd-cli markdown-report -o support_report.md
 
 # Or print to stdout
-uv run zendesk markdown-report
+uv run zd-cli markdown-report
 ```
 
 **Options:**
@@ -427,7 +427,7 @@ API responses and attachments are stored in the system temp directory:
 Files can be organized by ticket:
 ```bash
 # Saves to: <temp>/zendesk-skill/12345/attachments/file.pdf
-uv run zendesk attachment --ticket 12345 "https://..."
+uv run zd-cli attachment --ticket 12345 "https://..."
 ```
 
 ## Development
@@ -440,7 +440,7 @@ uv run pytest
 uv run python -c "from zendesk_skill.cli import app; print('OK')"
 
 # Show all commands
-uv run zendesk --help
+uv run zd-cli --help
 ```
 
 ## License

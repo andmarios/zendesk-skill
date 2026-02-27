@@ -21,7 +21,7 @@ from zendesk_skill.auth.scopes import DEFAULT_SCOPES
 from zendesk_skill.client import ZendeskAuthError, ZendeskAPIError, _load_config_from_file, _save_config
 
 # Token storage path
-CONFIG_DIR = Path.home() / ".claude" / ".zendesk-skill"
+CONFIG_DIR = Path.home() / ".config" / "zd-cli"
 OAUTH_TOKEN_PATH = CONFIG_DIR / "oauth_token.json"
 
 # Loopback server config
@@ -256,7 +256,7 @@ def _refresh_access_token(subdomain: str, refresh_token: str) -> dict:
                 detail = response.text[:200]
             raise ZendeskAuthError(
                 f"Token refresh failed ({response.status_code}): {detail}\n"
-                "Re-authenticate with: zendesk auth login-oauth"
+                "Re-authenticate with: zd-cli auth login-oauth"
             )
 
         return response.json()
@@ -298,7 +298,7 @@ class OAuthProvider:
 
         if self._token_data is None:
             raise ZendeskAuthError(
-                "No OAuth token found. Authenticate with: zendesk auth login-oauth"
+                "No OAuth token found. Authenticate with: zd-cli auth login-oauth"
             )
 
         # Check if token is expired
@@ -335,7 +335,7 @@ class OAuthProvider:
         refresh_token = self._token_data.get("refresh_token")
         if not refresh_token:
             raise ZendeskAuthError(
-                "No refresh token available. Re-authenticate with: zendesk auth login-oauth"
+                "No refresh token available. Re-authenticate with: zd-cli auth login-oauth"
             )
 
         token_response = _refresh_access_token(self._subdomain, refresh_token)

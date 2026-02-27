@@ -1,7 +1,7 @@
 """Security utilities for Zendesk skill - wrapper around prompt-security-utils.
 
 Security wrapping is enabled by default. To disable, add to
-~/.claude/.zendesk-skill/config.json:
+~/.config/zd-cli/config.json:
 
     {"security_enabled": false}
 
@@ -25,7 +25,7 @@ from prompt_security import (
 )
 
 # Zendesk config path
-ZENDESK_CONFIG_PATH = Path.home() / ".claude" / ".zendesk-skill" / "config.json"
+ZENDESK_CONFIG_PATH = Path.home() / ".config" / "zd-cli" / "config.json"
 
 __all__ = [
     "is_security_enabled",
@@ -56,7 +56,7 @@ def is_security_enabled() -> bool:
     """Check if security wrapping is enabled.
 
     Security is enabled by default. To disable, add to
-    ~/.claude/.zendesk-skill/config.json:
+    ~/.config/zd-cli/config.json:
         {"security_enabled": false}
 
     Returns:

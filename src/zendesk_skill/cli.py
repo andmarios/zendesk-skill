@@ -16,7 +16,7 @@ from zendesk_skill.queries import execute_jq, get_queries_for_tool, get_query
 
 # Main app
 app = typer.Typer(
-    name="zendesk",
+    name="zd-cli",
     help="Zendesk CLI - Search tickets, manage support, and analyze metrics.",
     no_args_is_help=True,
     add_completion=False,
@@ -333,6 +333,140 @@ def auth_logout_oauth_cmd() -> None:
         output["message"] = "No OAuth token file found."
 
     output_json(output)
+
+
+# =============================================================================
+# Server Auth Commands
+# =============================================================================
+
+
+@auth_app.command("server-login")
+def auth_server_login_cmd(
+    device: Annotated[
+        bool,
+        typer.Option("--device", "-d", help="Use device code flow instead of browser redirect"),
+    ] = False,
+) -> None:
+    """Authenticate to an OAuth relay server via SSO.
+
+    The relay server manages OAuth tokens centrally. This command
+    authenticates your identity via SSO and obtains a server JWT.
+    """
+    from zendesk_skill.auth.server import ServerAuthProvider
+    from zendesk_skill.client import get_server_config
+
+    config = get_server_config()
+    if not config.get("server_url"):
+        output_error("No server URL configured. Run: zd-cli auth set-mode --mode server --url <URL>")
+
+    try:
+        provider = ServerAuthProvider(server_url=config["server_url"], config=config)
+        provider.server_login(device_flow=device)
+        output_json({"success": True, "message": "Server authentication successful."})
+    except Exception as e:
+        output_error(str(e))
+
+
+@auth_app.command("server-status")
+def auth_server_status_cmd() -> None:
+    """Check server authentication status.
+
+    Shows relay server health, identity status, and token state.
+    """
+    from zendesk_skill.auth.server import ServerAuthProvider
+    from zendesk_skill.client import get_server_config
+
+    config = get_server_config()
+    if not config.get("server_url"):
+        output_json({
+            "mode": config.get("mode", "local"),
+            "server_url": None,
+            "authenticated": False,
+            "message": "Server mode not configured.",
+        })
+        return
+
+    try:
+        provider = ServerAuthProvider(server_url=config["server_url"], config=config)
+        status = provider.server_status()
+        output_json(status)
+    except Exception as e:
+        output_error(str(e))
+
+
+@auth_app.command("server-logout")
+def auth_server_logout_cmd() -> None:
+    """Logout from the OAuth relay server.
+
+    Revokes the server JWT and removes cached tokens.
+    """
+    from zendesk_skill.auth.server import ServerAuthProvider
+    from zendesk_skill.client import get_server_config
+
+    config = get_server_config()
+    if not config.get("server_url"):
+        output_error("Server mode not configured.")
+
+    try:
+        provider = ServerAuthProvider(server_url=config["server_url"], config=config)
+        provider.server_logout()
+        output_json({"success": True, "message": "Server logout successful."})
+    except Exception as e:
+        output_error(str(e))
+
+
+@auth_app.command("set-mode")
+def auth_set_mode_cmd(
+    mode: Annotated[
+        str,
+        typer.Option("--mode", "-m", help="Auth mode: 'local' or 'server'"),
+    ],
+    url: Annotated[
+        str | None,
+        typer.Option("--url", "-u", help="Relay server URL (required for server mode)"),
+    ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", "-p", help="Relay provider name (auto-discovers if only one)"),
+    ] = None,
+    subdomain: Annotated[
+        str | None,
+        typer.Option("--subdomain", "-s", help="Zendesk subdomain"),
+    ] = None,
+) -> None:
+    """Set the authentication mode (local or server).
+
+    Server mode delegates OAuth to a relay server that manages credentials centrally.
+    Local mode uses direct OAuth or API token authentication.
+    """
+    from zendesk_skill.client import save_server_mode, clear_server_mode, _load_config_from_file
+
+    if mode not in ("local", "server"):
+        output_error("Mode must be 'local' or 'server'.")
+
+    if mode == "server":
+        if not url:
+            output_error("Server mode requires --url.")
+        save_server_mode(server_url=url, server_provider=provider)
+        result = {"success": True, "mode": "server", "server_url": url}
+        if provider:
+            result["server_provider"] = provider
+    else:
+        clear_server_mode()
+        result = {"success": True, "mode": "local"}
+
+    # Optionally save subdomain
+    if subdomain:
+        import json
+        from zendesk_skill.client import CONFIG_DIR
+        config_path = CONFIG_DIR / "config.json"
+        config = _load_config_from_file()
+        config["subdomain"] = subdomain
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps(config, indent=2))
+        result["subdomain"] = subdomain
+
+    output_json(result)
 
 
 # =============================================================================

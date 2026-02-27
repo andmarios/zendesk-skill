@@ -6,7 +6,7 @@ A Claude Code skill that provides a CLI for Zendesk Support integration.
 
 ```
 zendesk-skill/
-├── pyproject.toml           # uv project config (entry point: zendesk)
+├── pyproject.toml           # uv project config (entry point: zd-cli)
 ├── SKILL.md                 # Claude Code skill file
 ├── CLAUDE.md                # This file
 ├── README.md                # User documentation
@@ -78,15 +78,15 @@ zendesk-skill/
 
 ```bash
 # Show all commands
-uv run zendesk --help
+uv run zd-cli --help
 
 # Run specific command
-uv run zendesk me
-uv run zendesk search "status:open"
-uv run zendesk ticket-details 12345
+uv run zd-cli me
+uv run zd-cli search "status:open"
+uv run zd-cli ticket-details 12345
 
 # Get command help
-uv run zendesk search --help
+uv run zd-cli search --help
 ```
 
 ### Testing
@@ -143,18 +143,18 @@ def command_name(
 
 ## External Requirements
 
-- `jq` must be installed for `zendesk query` command to work
+- `jq` must be installed for `zd-cli query` command to work
 - Zendesk credentials: OAuth token or API token (email + token + subdomain)
 
 ## Auth Configuration
 
 Auth provider is resolved automatically (first match wins):
-1. **OAuth token** on disk (`~/.claude/.zendesk-skill/oauth_token.json`) → `OAuthProvider`
+1. **OAuth token** on disk (`~/.config/zd-cli/oauth_token.json`) → `OAuthProvider`
 2. **API token** (env vars or config file) → `TokenAuthProvider`
 
 API token credentials load from:
 1. Environment variables: `ZENDESK_EMAIL`, `ZENDESK_TOKEN`, `ZENDESK_SUBDOMAIN`
-2. Config file: `~/.claude/.zendesk-skill/config.json`
+2. Config file: `~/.config/zd-cli/config.json`
 
 OAuth client credentials load from:
 1. Environment variables: `ZENDESK_OAUTH_CLIENT_ID`, `ZENDESK_OAUTH_CLIENT_SECRET`

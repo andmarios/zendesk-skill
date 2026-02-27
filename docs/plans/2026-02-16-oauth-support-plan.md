@@ -163,8 +163,8 @@ def resolve_auth_provider() -> AuthProvider:
 
     raise ZendeskAuthError(
         "No Zendesk credentials found. Set up using:\n"
-        "  OAuth:     zendesk auth login-oauth\n"
-        "  API Token: zendesk auth login\n"
+        "  OAuth:     zd-cli auth login-oauth\n"
+        "  API Token: zd-cli auth login\n"
         "  Env vars:  ZENDESK_EMAIL, ZENDESK_TOKEN, ZENDESK_SUBDOMAIN"
     )
 ```
@@ -710,7 +710,7 @@ def _refresh_access_token(subdomain: str, refresh_token: str) -> dict:
                 detail = response.text[:200]
             raise ZendeskAuthError(
                 f"Token refresh failed ({response.status_code}): {detail}\n"
-                "Re-authenticate with: zendesk auth login-oauth"
+                "Re-authenticate with: zd-cli auth login-oauth"
             )
 
         return response.json()
@@ -752,7 +752,7 @@ class OAuthProvider:
 
         if self._token_data is None:
             raise ZendeskAuthError(
-                "No OAuth token found. Authenticate with: zendesk auth login-oauth"
+                "No OAuth token found. Authenticate with: zd-cli auth login-oauth"
             )
 
         # Check if token is expired
@@ -789,7 +789,7 @@ class OAuthProvider:
         refresh_token = self._token_data.get("refresh_token")
         if not refresh_token:
             raise ZendeskAuthError(
-                "No refresh token available. Re-authenticate with: zendesk auth login-oauth"
+                "No refresh token available. Re-authenticate with: zd-cli auth login-oauth"
             )
 
         token_response = _refresh_access_token(self._subdomain, refresh_token)
@@ -1333,10 +1333,10 @@ Expected: ALL PASS
 
 **Step 2: Test CLI commands load correctly**
 
-Run: `uv run zendesk auth --help`
+Run: `uv run zd-cli auth --help`
 Expected: Shows login, status, logout, login-oauth, logout-oauth, login-slack, status-slack, logout-slack
 
-Run: `uv run zendesk auth login-oauth --help`
+Run: `uv run zd-cli auth login-oauth --help`
 Expected: Shows --subdomain, --client-id, --client-secret, --manual options
 
 **Step 3: Test import chain**
