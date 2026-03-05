@@ -297,13 +297,13 @@ The skill saves API responses locally and uses jq for efficient extraction:
 ```bash
 # 1. Fetch ticket details
 uv run zd-cli ticket-details 12345
-# -> Output: file_path: "/tmp/zendesk-skill/ticket_details_xxx.json"
+# -> Output: file_path: "/tmp/zd-cli-$UID/ticket_details_xxx.json"
 
 # 2. Extract just comment bodies
-uv run zd-cli query /tmp/zendesk-skill/ticket_details_xxx.json -q comments_slim
+uv run zd-cli query /tmp/zd-cli-$UID/ticket_details_xxx.json -q comments_slim
 
 # 3. List attachments if needed
-uv run zd-cli query /tmp/zendesk-skill/ticket_details_xxx.json -q attachments
+uv run zd-cli query /tmp/zd-cli-$UID/ticket_details_xxx.json -q attachments
 
 # 4. Download an attachment (organized by ticket)
 uv run zd-cli attachment --ticket 12345 "https://..."
@@ -421,12 +421,12 @@ The script uses the correct time basis for FRT calculation:
 ## File Storage
 
 API responses and attachments are stored in the system temp directory:
-- **Linux/macOS**: `/tmp/zendesk-skill/`
-- **Windows**: `%TEMP%\zendesk-skill\`
+- **Linux/macOS**: `/tmp/zd-cli-$UID/`
+- **Windows**: `%TEMP%\zd-cli-<UID>\`
 
 Files can be organized by ticket:
 ```bash
-# Saves to: <temp>/zendesk-skill/12345/attachments/file.pdf
+# Saves to: /tmp/zd-cli-$UID/12345/attachments/file.pdf
 uv run zd-cli attachment --ticket 12345 "https://..."
 ```
 

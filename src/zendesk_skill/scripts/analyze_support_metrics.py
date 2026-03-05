@@ -466,7 +466,8 @@ def calculate_frt_by_priority(
 
 
 def main():
-    base_dir = Path(tempfile.gettempdir()) / "zendesk-skill"
+    from zendesk_skill.storage import DEFAULT_STORAGE_DIR
+    base_dir = DEFAULT_STORAGE_DIR
 
     # Parse arguments
     parser = argparse.ArgumentParser(description="Analyze support metrics from Zendesk search results")

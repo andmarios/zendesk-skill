@@ -48,7 +48,7 @@ zendesk-skill/
 - Uses Typer for command-line interface
 - 25 commands organized by category
 - Outputs JSON to stdout
-- Saves full responses to `/tmp/zendesk-skill/`
+- Saves full responses to `/tmp/zd-cli-$UID/`
 
 ### Auth (auth/)
 - `AuthProvider` protocol: pluggable auth backends
@@ -64,7 +64,7 @@ zendesk-skill/
 - Proper error handling with actionable messages
 
 ### Storage (storage.py)
-- Saves all API responses to `/tmp/zendesk-skill/`
+- Saves all API responses to `/tmp/zd-cli-$UID/`
 - Auto-extracts response structure for metadata
 - File naming: `{command}_{sha256_8}_{timestamp}.json`
 
@@ -199,7 +199,7 @@ All commands output JSON to stdout:
 ```json
 {
   "summary_field": "value",
-  "file_path": "/tmp/zendesk-skill/command_xxx.json"
+  "file_path": "/tmp/zd-cli-$UID/command_xxx.json"
 }
 ```
 

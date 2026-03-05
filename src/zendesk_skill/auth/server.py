@@ -138,15 +138,22 @@ class ServerAuthProvider:
     # -- Server authentication (CLI user -> relay server) ----------------------
 
     def server_login(self, device_flow: bool = False) -> None:
-        """Authenticate the CLI user to the relay server.
+        """Authenticate the CLI user to the relay server, then obtain a Zendesk token.
 
-        Uses OAuth 2.1 PKCE flow (default) or device flow (for headless).
-        Stores the server JWT locally.
+        Two-step flow:
+        1. Authenticate CLI user to the relay (PKCE or device flow)
+        2. Initiate Zendesk OAuth via the relay to get an API token
+
+        Both steps happen in one go so the user is fully authenticated afterward.
         """
         if device_flow:
             self._server_device_flow()
         else:
             self._server_pkce_flow()
+
+        # Now chain the Zendesk OAuth so the user is fully authenticated
+        if not self.has_token():
+            self._run_server_auth_flow()
 
     def server_logout(self) -> None:
         """Revoke server token and delete local server_token.json."""

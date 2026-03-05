@@ -248,8 +248,9 @@ async def download_attachment(
             if not filename:
                 filename = "attachment"
 
-        # Determine directory based on ticket_id (cross-platform)
-        base_dir = Path(tempfile.gettempdir()) / "zendesk-skill"
+        # Determine directory based on ticket_id (cross-platform, per-user)
+        from zendesk_skill.storage import DEFAULT_STORAGE_DIR
+        base_dir = DEFAULT_STORAGE_DIR
         if ticket_id:
             attachments_dir = base_dir / ticket_id / "attachments"
         else:

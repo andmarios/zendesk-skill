@@ -29,14 +29,14 @@ uv run zd-cli search "status:open priority:urgent"
 uv run zd-cli ticket-details 12345
 
 # Query saved response (path shown in command output)
-uv run zd-cli query <temp>/zendesk-skill/ticket_details_xxx.json -q comments_slim
+uv run zd-cli query <temp>/zd-cli-<UID>/ticket_details_xxx.json -q comments_slim
 ```
 
 ## Key Concepts
 
 ### Save First, Query Later
 
-All API responses are automatically saved to `<temp>/zendesk-skill/` (system temp directory) with:
+All API responses are automatically saved to `<temp>/zd-cli-<UID>/` (system temp directory) with:
 - **Metadata**: Command, parameters, timestamp, item count
 - **Structure**: Auto-extracted schema showing field types
 - **Suggested queries**: Command-specific jq queries
@@ -245,7 +245,7 @@ uv run zd-cli query <file_path> --list
 ```bash
 # 1. Get full ticket details
 uv run zd-cli ticket-details 12345
-# -> Output includes: file_path (e.g., "<temp>/zendesk-skill/12345/ticket_details_xxx.json")
+# -> Output includes: file_path (e.g., "<temp>/zd-cli-<UID>/12345/ticket_details_xxx.json")
 
 # 2. Get ticket summary (use the file_path from step 1)
 uv run zd-cli query <file_path> -q ticket_summary
@@ -364,20 +364,20 @@ Output paths are determined in this order:
    uv run zd-cli ticket 12345 --output ./my-ticket.json
    ```
 
-2. **`--ticket ID`** - Organizes files under `<temp>/zendesk-skill/{ticket_id}/`
+2. **`--ticket ID`** - Organizes files under `<temp>/zd-cli-<UID>/{ticket_id}/`
    ```bash
    uv run zd-cli attachment --ticket 12345 <url>
-   # -> <temp>/zendesk-skill/12345/attachments/filename.png
+   # -> <temp>/zd-cli-<UID>/12345/attachments/filename.png
    ```
 
-3. **Default** - Falls back to `<temp>/zendesk-skill/`
+3. **Default** - Falls back to `<temp>/zd-cli-<UID>/`
 
 ### Ticket-Based Organization
 
 When you use ticket-related commands (`ticket`, `ticket-details`, `ticket-metrics`, etc.), files are automatically organized by ticket ID:
 
 ```
-<temp>/zendesk-skill/
+<temp>/zd-cli-<UID>/
 ├── 12345/                          # Ticket 12345
 │   ├── ticket_abc123_1234567890.json
 │   ├── ticket_details_def456_1234567891.json
@@ -644,7 +644,7 @@ This generates:
 - Call detection results
 - FRT and resolution statistics
 - Status and priority breakdown
-- JSON output at `<temp>/zendesk-skill/support_analysis.json`
+- JSON output at `<temp>/zd-cli-<UID>/support_analysis.json`
 
 ## Tips
 

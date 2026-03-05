@@ -2,14 +2,15 @@
 
 import hashlib
 import json
+import os
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-# Default storage directory (cross-platform)
-DEFAULT_STORAGE_DIR = Path(tempfile.gettempdir()) / "zendesk-skill"
+# Default storage directory (cross-platform, per-user to avoid conflicts)
+DEFAULT_STORAGE_DIR = Path(tempfile.gettempdir()) / f"zd-cli-{os.getuid()}"
 
 
 def _get_storage_dir(ticket_id: str | None = None) -> Path:
