@@ -88,12 +88,13 @@ class ServerAuthProvider:
             if refresh_token:
                 try:
                     self._refresh_via_server(refresh_token)
-                except Exception:
+                except Exception as e:
+                    print(f"[zd-cli] Token refresh failed: {e}", file=sys.stderr)
                     # Refresh failed -- try full re-auth
                     self._token_data = None
                     self._run_server_auth_flow()
             else:
-                # No refresh token -- full re-auth
+                print("[zd-cli] No refresh token available -- full re-auth required.", file=sys.stderr)
                 self._token_data = None
                 self._run_server_auth_flow()
 
@@ -151,9 +152,8 @@ class ServerAuthProvider:
         else:
             self._server_pkce_flow()
 
-        # Now chain the Zendesk OAuth so the user is fully authenticated
-        if not self.has_token():
-            self._run_server_auth_flow()
+        # Always chain the Zendesk OAuth so the user is fully authenticated
+        self._run_server_auth_flow()
 
     def server_logout(self) -> None:
         """Revoke server token and delete local server_token.json."""
@@ -630,7 +630,12 @@ class ServerAuthProvider:
         }
         """
         resolved_refresh = token_data.get("refresh_token", refresh_token)
-        expires_in = token_data.get("expires_in", 7200)
+        expires_in = token_data.get("expires_in", 0)
+
+        # expires_in=0 means the provider doesn't set expiry (e.g. Zendesk).
+        # Treat as non-expiring: 10 years.
+        if not expires_in:
+            expires_in = 10 * 365 * 24 * 3600
 
         self._token_data = {
             "access_token": token_data["access_token"],

@@ -787,11 +787,15 @@ wheels = [
 
 [[package]]
 name = "prompt-security-utils"
-version = "0.1.0"
-source = { git = "https://github.com/andmarios/prompt-security-utils#ad17a7aa46928d2c4364cbe190950b3ef09e86d6" }
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastembed" },
     { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/75/b9/ccdae521738dd8b877ae5eba00f79af056407e35f2b8a405083e4d71d1da/prompt_security_utils-1.1.0.tar.gz", hash = "sha256:4c63920abe38bab5abfe8791fdcc5cc54570082ab7c3d12eeee7b6991b4970e6", size = 39975, upload-time = "2026-03-05T13:54:19.136Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/ff/9cad3e836f75e37520d1e37492beea891f856dd789dc629504bd86860577/prompt_security_utils-1.1.0-py3-none-any.whl", hash = "sha256:385f84fe6897b3c72c56a4a2e4ec2ba097aa217b011677d1065dd9c2bd925295", size = 29509, upload-time = "2026-03-05T13:54:21.654Z" },
 ]
 
 [[package]]
@@ -1402,7 +1406,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.6.0" },
     { name = "mistune", specifier = ">=3.0.0" },
-    { name = "prompt-security-utils", git = "https://github.com/andmarios/prompt-security-utils" },
+    { name = "prompt-security-utils", specifier = ">=1.1.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.9.0" },

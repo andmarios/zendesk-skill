@@ -111,12 +111,4 @@ def wrap_field_simple(
     if is_allowlisted(source_type, source_id):
         return content  # Return unwrapped
 
-    security_config = load_config()
-
-    return wrap_untrusted_content(
-        content,
-        source_type,
-        source_id,
-        start_marker=security_config.content_start_marker,
-        end_marker=security_config.content_end_marker,
-    )
+    return wrap_untrusted_content(content, source_type, source_id)
