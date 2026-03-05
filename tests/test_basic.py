@@ -20,7 +20,7 @@ def test_cli_has_commands():
 
     # Get registered commands
     commands = list(app.registered_commands)
-    assert len(commands) == 27
+    assert len(commands) == 28
 
 
 def test_cli_command_names():

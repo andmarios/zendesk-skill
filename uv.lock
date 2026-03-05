@@ -787,15 +787,15 @@ wheels = [
 
 [[package]]
 name = "prompt-security-utils"
-version = "1.1.0"
+version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastembed" },
     { name = "httpx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/75/b9/ccdae521738dd8b877ae5eba00f79af056407e35f2b8a405083e4d71d1da/prompt_security_utils-1.1.0.tar.gz", hash = "sha256:4c63920abe38bab5abfe8791fdcc5cc54570082ab7c3d12eeee7b6991b4970e6", size = 39975, upload-time = "2026-03-05T13:54:19.136Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1f/ea/893a23133cc87bc0e547047d9e0f0ba57a39601ed03461cdade40aa6bee7/prompt_security_utils-1.2.0.tar.gz", hash = "sha256:01ba7c2beb9e3747baf418bfa7b0124a1a5a187442314b8467567f5153f42e71", size = 41290, upload-time = "2026-03-05T15:03:42.241Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f4/ff/9cad3e836f75e37520d1e37492beea891f856dd789dc629504bd86860577/prompt_security_utils-1.1.0-py3-none-any.whl", hash = "sha256:385f84fe6897b3c72c56a4a2e4ec2ba097aa217b011677d1065dd9c2bd925295", size = 29509, upload-time = "2026-03-05T13:54:21.654Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/fb/0ecd1a2b9c1c27e10e79a65f3b486b67cce790bcbe5e30417b2bb8cf5cfa/prompt_security_utils-1.2.0-py3-none-any.whl", hash = "sha256:33ceac16ef2573c4189fbf75bd4e32a7d6f590edebe30c7e134b2c3ee1cdde29", size = 30831, upload-time = "2026-03-05T15:03:40.42Z" },
 ]
 
 [[package]]
@@ -1406,7 +1406,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.6.0" },
     { name = "mistune", specifier = ">=3.0.0" },
-    { name = "prompt-security-utils", specifier = ">=1.1.0" },
+    { name = "prompt-security-utils", specifier = ">=1.2.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.9.0" },

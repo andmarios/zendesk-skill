@@ -8,13 +8,12 @@ when_to_use: When users ask about Zendesk tickets, support metrics, CSAT ratings
 
 A command-line interface for comprehensive Zendesk API integration. Run commands via `uv run zd-cli <command>` in the skill directory.
 
-> **IMPORTANT: Always use `uv run`**
+> **Running commands**
 >
-> All commands MUST be run with `uv run` to ensure dependencies are available:
-> - CLI commands: `uv run zd-cli <command>`
-> - Python scripts: `uv run python src/zendesk_skill/scripts/<script>.py`
+> - **Installed (recommended):** `uvx --from zendesk-skill zd-cli <command>`
+> - **Development (cloned repo):** `uv run zd-cli <command>` from the repo directory
 >
-> Never use `python3` or `python` directly - it will fail with `ModuleNotFoundError`.
+> Never use bare `python3 zd-cli` — dependencies won't be available. All examples below use `uv run zd-cli`; substitute `uvx --from zendesk-skill zd-cli` if running outside the repo.
 
 ## Quick Start
 

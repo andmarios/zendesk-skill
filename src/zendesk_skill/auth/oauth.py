@@ -452,8 +452,13 @@ class OAuthProvider:
         code_challenge: str,
         state: str,
     ) -> dict:
-        """Run OAuth flow with manual URL paste."""
-        redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
+        """Run OAuth flow with manual URL paste (headless/SSH environments).
+
+        Uses a real localhost redirect URI so Zendesk accepts the request.
+        The browser will hit a connection-refused page; the user pastes the
+        full callback URL (or just the code= value) back to the CLI.
+        """
+        redirect_uri = f"http://{LOOPBACK_IP}:8080/callback"
 
         auth_params = {
             "response_type": "code",
@@ -470,15 +475,40 @@ class OAuthProvider:
         )
 
         print(f"\nOpen this URL in your browser:\n\n{auth_url}\n", file=sys.stderr)
-        print("After authorizing, paste the authorization code below.", file=sys.stderr)
+        print(
+            "After authorizing, your browser will be redirected to localhost\n"
+            "(which will show a 'connection refused' error — that's expected).\n"
+            "Paste the full redirect URL from your browser's address bar below,\n"
+            "or just the value of the 'code=' parameter.\n",
+            file=sys.stderr,
+        )
 
-        code = input("Authorization code: ").strip()
-        if not code:
+        raw = input("Paste URL or code: ").strip()
+        if not raw:
             raise ZendeskAuthError("No authorization code provided.")
+
+        # Accept either a full callback URL or a bare code
+        code = self._extract_code(raw, state)
 
         return self._complete_auth(
             code, client_id, client_secret, redirect_uri, code_verifier
         )
+
+    @staticmethod
+    def _extract_code(raw: str, expected_state: str | None = None) -> str:
+        """Extract authorization code from a full callback URL or bare code string."""
+        if raw.startswith("http"):
+            parsed = urlparse(raw)
+            params = parse_qs(parsed.query)
+            if "error" in params:
+                raise ZendeskAuthError(f"Authorization denied: {params['error'][0]}")
+            if expected_state and params.get("state", [None])[0] != expected_state:
+                raise ZendeskAuthError("State mismatch — possible CSRF attack.")
+            code = params.get("code", [None])[0]
+            if not code:
+                raise ZendeskAuthError("No 'code' parameter found in the pasted URL.")
+            return code
+        return raw
 
     def _complete_auth(
         self,
