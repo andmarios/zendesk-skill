@@ -843,6 +843,27 @@ def me_cmd(
     output_json(result)
 
 
+@app.command("security-info")
+def security_info_cmd(
+    show_instructions: Annotated[
+        bool,
+        typer.Option("--instructions", "-i", help="Show full MCP security instructions text"),
+    ] = False,
+) -> None:
+    """Show current session security markers and configuration."""
+    from zendesk_skill.utils.security import is_security_enabled, security_instructions
+
+    start, end = operations.get_session_markers()
+    enabled = is_security_enabled()
+
+    output_json({
+        "security_enabled": enabled,
+        "session_start_marker": start,
+        "session_end_marker": end,
+        **({"mcp_instructions": security_instructions(start, end)} if show_instructions else {}),
+    })
+
+
 # =============================================================================
 # Query Stored Files
 # =============================================================================
