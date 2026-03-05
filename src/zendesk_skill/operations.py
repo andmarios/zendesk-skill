@@ -24,7 +24,32 @@ from zendesk_skill.client import (
 from zendesk_skill.formatting import format_for_zendesk
 from zendesk_skill.queries import get_queries_for_tool
 from zendesk_skill.storage import save_response
-from zendesk_skill.utils.security import is_security_enabled, wrap_field_simple
+from zendesk_skill.utils.security import (
+    generate_markers,
+    is_security_enabled,
+    wrap_field_simple,
+)
+
+# ---------------------------------------------------------------------------
+# Session-scoped security markers
+# ---------------------------------------------------------------------------
+_session_start_marker: str | None = None
+_session_end_marker: str | None = None
+
+
+def set_session_markers(start: str, end: str) -> None:
+    """Set session security markers (called once at startup)."""
+    global _session_start_marker, _session_end_marker
+    _session_start_marker = start
+    _session_end_marker = end
+
+
+def get_session_markers() -> tuple[str, str]:
+    """Return session markers, generating lazily if not yet set."""
+    global _session_start_marker, _session_end_marker
+    if _session_start_marker is None or _session_end_marker is None:
+        _session_start_marker, _session_end_marker = generate_markers()
+    return _session_start_marker, _session_end_marker
 from zendesk_skill.utils.time import mins_to_human
 
 # Text-based file extensions that should be scanned for prompt injection
@@ -128,7 +153,7 @@ async def get_ticket(
     ticket_id_str = str(ticket.get("id", ticket_id))
     return {
         "id": ticket.get("id"),
-        "subject": wrap_field_simple(ticket.get("subject"), "ticket", ticket_id_str),
+        "subject": wrap_field_simple(ticket.get("subject"), "ticket", ticket_id_str, *get_session_markers()),
         "status": ticket.get("status"),
         "priority": ticket.get("priority"),
         "file_path": str(file_path),
@@ -176,7 +201,7 @@ async def get_ticket_details(
     ticket_id_str = str(ticket.get("id", ticket_id))
     return {
         "id": ticket.get("id"),
-        "subject": wrap_field_simple(ticket.get("subject"), "ticket", ticket_id_str),
+        "subject": wrap_field_simple(ticket.get("subject"), "ticket", ticket_id_str, *get_session_markers()),
         "status": ticket.get("status"),
         "comment_count": len(combined["comments"]),
         "file_path": str(file_path),

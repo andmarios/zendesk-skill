@@ -9,9 +9,16 @@ from zendesk_skill import operations
 from zendesk_skill.client import ZendeskAuthError, ZendeskAPIError
 from zendesk_skill.queries import execute_jq, get_query
 from zendesk_skill.storage import load_response
+from zendesk_skill.utils.security import generate_markers, security_instructions
 
-# Initialize the MCP server
-mcp = FastMCP("zendesk_skill")
+# Generate session markers once at server startup and register them.
+# The markers are delivered to the LLM via MCP InitializeResult.instructions
+# (a trusted channel) before any untrusted ticket content is shown.
+_START, _END = generate_markers()
+operations.set_session_markers(_START, _END)
+
+# Initialize the MCP server with security instructions in the system prompt
+mcp = FastMCP("zendesk_skill", instructions=security_instructions(_START, _END))
 
 
 # =============================================================================

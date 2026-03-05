@@ -16,9 +16,11 @@ from typing import Any
 from prompt_security import (
     SecurityConfig,
     detect_suspicious_content,
+    generate_markers,
     load_config,
     output_external_content,
     screen_content,
+    security_instructions,
     wrap_field,
     wrap_fields,
     wrap_untrusted_content,
@@ -29,6 +31,8 @@ ZENDESK_CONFIG_PATH = Path.home() / ".config" / "zd-cli" / "config.json"
 
 __all__ = [
     "is_security_enabled",
+    "generate_markers",
+    "security_instructions",
     "wrap_untrusted_content",
     "wrap_field",
     "wrap_field_simple",
@@ -86,6 +90,8 @@ def wrap_field_simple(
     content: str | None,
     source_type: str,
     source_id: str,
+    start_marker: str,
+    end_marker: str,
 ) -> dict[str, Any] | str | None:
     """Wrap a field with security markers, returning simplified output for MCP tools.
 
@@ -96,6 +102,8 @@ def wrap_field_simple(
         content: The content to wrap (returns None if None)
         source_type: Type of source ("ticket", "comment", etc.)
         source_id: Unique identifier for the source
+        start_marker: Session start marker (established via trusted channel)
+        end_marker: Session end marker (established via trusted channel)
 
     Returns:
         Wrapped content dict if security enabled, otherwise original content
@@ -111,4 +119,4 @@ def wrap_field_simple(
     if is_allowlisted(source_type, source_id):
         return content  # Return unwrapped
 
-    return wrap_untrusted_content(content, source_type, source_id)
+    return wrap_untrusted_content(content, source_type, source_id, start_marker, end_marker)

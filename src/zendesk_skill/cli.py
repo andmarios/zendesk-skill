@@ -1036,6 +1036,10 @@ def markdown_report_cmd(
 
 def main_cli() -> None:
     """Entry point for CLI."""
+    # Generate session markers at process start (defense-in-depth for CLI usage).
+    from zendesk_skill.utils.security import generate_markers
+    start, end = generate_markers()
+    operations.set_session_markers(start, end)
     app()
 
 
