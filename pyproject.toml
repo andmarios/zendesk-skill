@@ -1,6 +1,6 @@
 [project]
 name = "zd-cli"
-version = "1.1.0"
+version = "1.2.0"
 description = "Zendesk CLI and MCP Server for Claude Code - Search tickets, manage support, and analyze metrics"
 readme = "README.md"
 requires-python = ">=3.12"

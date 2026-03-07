@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from zendesk_skill.utils.security import is_security_enabled
+
 # Default storage directory (cross-platform, per-user to avoid conflicts)
 DEFAULT_STORAGE_DIR = Path(tempfile.gettempdir()) / f"zd-cli-{os.getuid()}"
 
@@ -146,6 +148,81 @@ def _count_items(data: Any) -> int:
     return 0
 
 
+# Fields to scan for suspicious content, keyed by tool_name.
+SCANNABLE_FIELDS: dict[str, list[str]] = {
+    "ticket": ["ticket.subject", "ticket.description"],
+    "ticket_details": [
+        "ticket.subject", "ticket.description",
+        "comments[].body", "comments[].plain_body",
+    ],
+    "search": ["results[].subject", "results[].description"],
+    "user": ["user.name", "user.notes"],
+    "search_users": ["users[].name"],
+    "organization": ["organization.name", "organization.notes"],
+    "search_organizations": ["organizations[].name"],
+    "satisfaction_rating": ["satisfaction_rating.comment"],
+    "satisfaction_ratings": ["satisfaction_ratings[].comment"],
+    "linked_incidents": ["tickets[].subject"],
+    "view_tickets": ["tickets[].subject", "tickets[].description"],
+}
+
+
+def _resolve_field_path(data: Any, path: str) -> list[str]:
+    """Extract string values from a dotted field path.
+
+    Supports "[]" notation for iterating over arrays.
+    Returns a list of non-None string values found at the path.
+    """
+    parts = path.split(".")
+    current: list[Any] = [data]
+
+    for part in parts:
+        next_values: list[Any] = []
+        for val in current:
+            if val is None or not isinstance(val, (dict, list)):
+                continue
+            if part.endswith("[]"):
+                key = part[:-2]
+                items = val.get(key, []) if isinstance(val, dict) else []
+                if isinstance(items, list):
+                    next_values.extend(items)
+            else:
+                if isinstance(val, dict) and part in val:
+                    next_values.append(val[part])
+        current = next_values
+
+    return [v for v in current if isinstance(v, str) and v]
+
+
+def _scan_fields(tool_name: str, data: Any) -> list[dict[str, Any]]:
+    """Scan relevant fields in API response data for suspicious patterns.
+
+    Returns list of detection dicts (empty if nothing found or scanning disabled).
+    """
+    if not is_security_enabled():
+        return []
+
+    field_paths = SCANNABLE_FIELDS.get(tool_name)
+    if not field_paths:
+        return []
+
+    texts: list[str] = []
+    for path in field_paths:
+        texts.extend(_resolve_field_path(data, path))
+
+    if not texts:
+        return []
+
+    combined = "\n".join(texts)
+
+    try:
+        from prompt_security import detect_suspicious_content
+        detections = detect_suspicious_content(combined)
+        return [d.to_dict() for d in detections]
+    except Exception:
+        return []
+
+
 def save_response(
     tool_name: str,
     params: dict[str, Any],
@@ -192,6 +269,11 @@ def save_response(
         "suggestedQueries": suggested_queries or [],
         "data": data,
     }
+
+    # Scan for suspicious content
+    detections = _scan_fields(tool_name, data)
+    if detections:
+        stored_data["metadata"]["security_detections"] = detections
 
     # Write to file
     with open(file_path, "w") as f:

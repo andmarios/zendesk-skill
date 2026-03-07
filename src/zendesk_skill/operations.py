@@ -446,7 +446,7 @@ async def create_ticket(
     return {
         "created": True,
         "id": ticket.get("id"),
-        "subject": ticket.get("subject"),
+        "subject": wrap_field_simple(ticket.get("subject"), "ticket", str(ticket.get("id", "")), *get_session_markers()),
         "file_path": str(file_path),
     }
 
@@ -728,7 +728,13 @@ async def list_views(
     views = result.get("views", [])
     return {
         "count": len(views),
-        "views": [{"id": v.get("id"), "title": v.get("title")} for v in views[:10]],
+        "views": [
+            {
+                "id": v.get("id"),
+                "title": wrap_field_simple(v.get("title"), "view", str(v.get("id", "")), *get_session_markers()),
+            }
+            for v in views[:10]
+        ],
         "file_path": str(file_path),
     }
 
@@ -826,10 +832,11 @@ async def get_user(
     )
 
     user = result.get("user", {})
+    user_id_str = str(user.get("id", user_id))
     return {
         "id": user.get("id"),
-        "name": user.get("name"),
-        "email": user.get("email"),
+        "name": wrap_field_simple(user.get("name"), "user", user_id_str, *get_session_markers()),
+        "email": wrap_field_simple(user.get("email"), "user", user_id_str, *get_session_markers()),
         "role": user.get("role"),
         "file_path": str(file_path),
     }
@@ -860,7 +867,11 @@ async def search_users(
     return {
         "count": len(users),
         "users": [
-            {"id": u.get("id"), "name": u.get("name"), "email": u.get("email")}
+            {
+                "id": u.get("id"),
+                "name": wrap_field_simple(u.get("name"), "user", str(u.get("id", "")), *get_session_markers()),
+                "email": wrap_field_simple(u.get("email"), "user", str(u.get("id", "")), *get_session_markers()),
+            }
             for u in users[:10]
         ],
         "file_path": str(file_path),
@@ -890,9 +901,10 @@ async def get_organization(
     )
 
     org = result.get("organization", {})
+    org_id_str = str(org.get("id", org_id))
     return {
         "id": org.get("id"),
-        "name": org.get("name"),
+        "name": wrap_field_simple(org.get("name"), "organization", org_id_str, *get_session_markers()),
         "domain_names": org.get("domain_names"),
         "file_path": str(file_path),
     }
@@ -922,7 +934,13 @@ async def search_organizations(
     orgs = result.get("organizations", [])
     return {
         "count": len(orgs),
-        "organizations": [{"id": o.get("id"), "name": o.get("name")} for o in orgs[:10]],
+        "organizations": [
+            {
+                "id": o.get("id"),
+                "name": wrap_field_simple(o.get("name"), "organization", str(o.get("id", "")), *get_session_markers()),
+            }
+            for o in orgs[:10]
+        ],
         "file_path": str(file_path),
     }
 
@@ -1040,11 +1058,12 @@ async def get_current_user(
     file_path, _ = save_response("me", {}, result, [], output_path)
 
     user = result.get("user", {})
+    user_id_str = str(user.get("id", "me"))
     return {
         "authenticated": True,
         "id": user.get("id"),
-        "name": user.get("name"),
-        "email": user.get("email"),
+        "name": wrap_field_simple(user.get("name"), "user", user_id_str, *get_session_markers()),
+        "email": wrap_field_simple(user.get("email"), "user", user_id_str, *get_session_markers()),
         "role": user.get("role"),
         "file_path": str(file_path),
     }

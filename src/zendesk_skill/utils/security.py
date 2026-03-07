@@ -119,4 +119,4 @@ def wrap_field_simple(
     if is_allowlisted(source_type, source_id):
         return content  # Return unwrapped
 
-    return wrap_untrusted_content(content, source_type, source_id, start_marker, end_marker)
+    return wrap_field(content, source_type, source_id, start_marker, end_marker)

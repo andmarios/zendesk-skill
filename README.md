@@ -252,6 +252,38 @@ Configure in `~/.config/zd-cli/config.json` to add after-hours and on-call secti
 
 When configured, reports include after-hours ticket counts, messages, replies, and on-call engagements (tickets matching the configured priority + customer domain during on-call hours). FRT for on-call tickets is calculated in calendar time; all others use business hours.
 
+## Security: Prompt Injection Protection
+
+All content from Zendesk is treated as untrusted input and screened through a multi-layer security pipeline before reaching the LLM:
+
+1. **Regex detection** — known prompt injection patterns (instruction overrides, prompt extraction, leetspeak evasion)
+2. **Semantic matching** — fuzzy similarity against known injection templates
+3. **Haiku/LLM screening** — when configured, an LLM-based classifier for sophisticated attacks
+
+Every LLM-facing field (ticket subjects, comment bodies, user names, emails, org names, view titles) is wrapped with session-scoped security markers. Stored response files are also scanned at save time, with detection results preserved in file metadata.
+
+Security is **enabled by default**. Configure in `~/.config/zd-cli/config.json`:
+
+```json
+{
+  "security_enabled": true,
+  "allowlisted_tickets": ["12345", "67890"]
+}
+```
+
+- `security_enabled` — set to `false` to disable all screening and wrapping (default: `true`)
+- `allowlisted_tickets` — ticket IDs to skip wrapping (for trusted/internal tickets)
+
+```bash
+# View current security status and session markers
+zd-cli security-info
+
+# Include full MCP security instructions
+zd-cli security-info --instructions
+```
+
+Requires [`prompt-security-utils`](https://pypi.org/project/prompt-security-utils/) (included as a dependency).
+
 ## MCP Server
 
 The MCP server exposes the same functionality for AI assistants that support the Model Context Protocol.
