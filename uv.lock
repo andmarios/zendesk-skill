@@ -787,15 +787,15 @@ wheels = [
 
 [[package]]
 name = "prompt-security-utils"
-version = "1.2.0"
+version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastembed" },
     { name = "httpx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1f/ea/893a23133cc87bc0e547047d9e0f0ba57a39601ed03461cdade40aa6bee7/prompt_security_utils-1.2.0.tar.gz", hash = "sha256:01ba7c2beb9e3747baf418bfa7b0124a1a5a187442314b8467567f5153f42e71", size = 41290, upload-time = "2026-03-05T15:03:42.241Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3c/bd/257b1f32c7aa6227d8f26aa42436563b50624fd1b81c0cab746b53a8eee7/prompt_security_utils-1.4.0.tar.gz", hash = "sha256:c5819ca72d291ce5494c65c526013a36c75461d6334c6eedb4425998565a38ba", size = 60312, upload-time = "2026-03-07T16:57:46.947Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6f/fb/0ecd1a2b9c1c27e10e79a65f3b486b67cce790bcbe5e30417b2bb8cf5cfa/prompt_security_utils-1.2.0-py3-none-any.whl", hash = "sha256:33ceac16ef2573c4189fbf75bd4e32a7d6f590edebe30c7e134b2c3ee1cdde29", size = 30831, upload-time = "2026-03-05T15:03:40.42Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/e3/edd7baeb56acecde16717682017337653b90a2b0bd759669c0ca3ae815e6/prompt_security_utils-1.4.0-py3-none-any.whl", hash = "sha256:17417a40f7e6a33c43d904c87bd67230ae0f8cb14c4438420ea7e5448d76ad12", size = 34387, upload-time = "2026-03-07T16:57:47.982Z" },
 ]
 
 [[package]]
@@ -1380,8 +1380,8 @@ wheels = [
 ]
 
 [[package]]
-name = "zendesk-skill"
-version = "1.0.0"
+name = "zd-cli"
+version = "1.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
@@ -1406,7 +1406,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.6.0" },
     { name = "mistune", specifier = ">=3.0.0" },
-    { name = "prompt-security-utils", specifier = ">=1.2.0" },
+    { name = "prompt-security-utils", specifier = ">=1.4.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.9.0" },

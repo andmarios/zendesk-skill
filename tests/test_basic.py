@@ -1005,6 +1005,40 @@ def test_operations_get_organization_wraps_name(monkeypatch):
     assert result["domain_names"] == ["acme.com"]
 
 
+def test_save_response_runs_semantic_screening(tmp_path, monkeypatch):
+    """Semantic screening runs at save time when enabled."""
+    from unittest.mock import patch, MagicMock
+
+    monkeypatch.setattr("zendesk_skill.storage.is_security_enabled", lambda: True)
+
+    mock_result = MagicMock()
+    mock_result.injection_detected = True
+    mock_result.to_dict.return_value = {"source": "semantic", "injection_detected": True}
+
+    mock_config = MagicMock()
+    mock_config.semantic_enabled = True
+    mock_config.detection_enabled = True
+    mock_config.get_custom_patterns.return_value = None
+
+    with patch("prompt_security.detect_suspicious_content", return_value=[]) as mock_detect:
+        with patch("prompt_security.screen_content_semantic", return_value=mock_result) as mock_screen:
+            with patch("prompt_security.load_config", return_value=mock_config):
+                from zendesk_skill.storage import _scan_fields
+                detections = _scan_fields("ticket", {"ticket": {"subject": "Test", "description": "Hello"}})
+
+                # Tier 1: regex called with custom_patterns
+                assert mock_detect.called
+                _, kwargs = mock_detect.call_args
+                # custom_patterns passed as second positional arg
+                args, _ = mock_detect.call_args
+                assert len(args) == 2  # (combined_text, custom_patterns)
+                assert args[1] is None  # get_custom_patterns returned None
+
+                # Tier 2: semantic called
+                assert mock_screen.called
+                assert any(d.get("source") == "semantic" for d in detections)
+
+
 def test_operations_create_ticket_wraps_subject(monkeypatch):
     """Test that create_ticket wraps the echo-back subject."""
     import zendesk_skill.operations as ops
@@ -1027,3 +1061,79 @@ def test_operations_create_ticket_wraps_subject(monkeypatch):
 
     assert isinstance(result["subject"], dict)
     assert result["subject"]["data"] == "New ticket subject"
+
+
+# =============================================================================
+# Attachment Security: Size-Aware Scanning + CLI Hints
+# =============================================================================
+
+
+def test_download_attachment_small_text_scanned(tmp_path, monkeypatch):
+    """Text files <= 1MB are scanned inline with read_and_wrap_file."""
+    from unittest.mock import patch, MagicMock, AsyncMock
+    import zendesk_skill.operations as ops
+
+    # Create small text file
+    text_file = tmp_path / "test.txt"
+    text_file.write_text("Hello world")
+
+    # Mock the client download to just return the path
+    mock_client = MagicMock()
+    mock_client.download_file = AsyncMock(return_value=text_file)
+    monkeypatch.setattr(ops, "_get_client", lambda: mock_client)
+    monkeypatch.setattr(ops, "is_security_enabled", lambda: True)
+
+    with patch("zendesk_skill.operations.read_and_wrap_file") as mock_wrap:
+        mock_wrap.return_value = {"data": "Hello world", "trust_level": "external"}
+        import asyncio
+        result = asyncio.get_event_loop().run_until_complete(
+            ops.download_attachment("https://example.com/test.txt", output_path=str(text_file))
+        )
+        assert mock_wrap.called
+        assert result["downloaded"] is True
+
+
+def test_download_attachment_large_text_hint(tmp_path, monkeypatch):
+    """Text files > 1MB get CLI tool hint instead of inline scan."""
+    from unittest.mock import MagicMock, AsyncMock
+    import zendesk_skill.operations as ops
+
+    # Create >1MB text file
+    large_file = tmp_path / "large.log"
+    large_file.write_text("x" * 1_100_000)
+
+    mock_client = MagicMock()
+    mock_client.download_file = AsyncMock(return_value=large_file)
+    monkeypatch.setattr(ops, "_get_client", lambda: mock_client)
+    monkeypatch.setattr(ops, "is_security_enabled", lambda: True)
+
+    import asyncio
+    result = asyncio.get_event_loop().run_until_complete(
+        ops.download_attachment("https://example.com/large.log", output_path=str(large_file))
+    )
+    assert "security_note" in result
+    assert "UNTRUSTED" in result["security_note"]
+    assert "prompt-security-utils" in result["security_note"]
+
+
+def test_download_attachment_binary_hint(tmp_path, monkeypatch):
+    """Binary files get serious security warning with CLI tool hint."""
+    from unittest.mock import MagicMock, AsyncMock
+    import zendesk_skill.operations as ops
+
+    # Create binary file
+    pdf_file = tmp_path / "report.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 fake content")
+
+    mock_client = MagicMock()
+    mock_client.download_file = AsyncMock(return_value=pdf_file)
+    monkeypatch.setattr(ops, "_get_client", lambda: mock_client)
+    monkeypatch.setattr(ops, "is_security_enabled", lambda: True)
+
+    import asyncio
+    result = asyncio.get_event_loop().run_until_complete(
+        ops.download_attachment("https://example.com/report.pdf", output_path=str(pdf_file))
+    )
+    assert "security_note" in result
+    assert "UNTRUSTED" in result["security_note"]
+    assert "prompt-security-utils" in result["security_note"]

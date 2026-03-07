@@ -19,11 +19,12 @@ from prompt_security import (
     generate_markers,
     load_config,
     output_external_content,
+    read_and_wrap_file,
     screen_content,
     security_instructions,
+    wrap_external_data,
     wrap_field,
     wrap_fields,
-    wrap_untrusted_content,
 )
 
 # Zendesk config path
@@ -33,7 +34,8 @@ __all__ = [
     "is_security_enabled",
     "generate_markers",
     "security_instructions",
-    "wrap_untrusted_content",
+    "wrap_external_data",
+    "read_and_wrap_file",
     "wrap_field",
     "wrap_field_simple",
     "wrap_fields",

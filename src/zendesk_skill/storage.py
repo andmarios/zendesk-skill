@@ -197,7 +197,8 @@ def _resolve_field_path(data: Any, path: str) -> list[str]:
 def _scan_fields(tool_name: str, data: Any) -> list[dict[str, Any]]:
     """Scan relevant fields in API response data for suspicious patterns.
 
-    Returns list of detection dicts (empty if nothing found or scanning disabled).
+    Runs regex detection (tier 1) and semantic similarity (tier 2) at save time.
+    Returns list of detection/screening dicts (empty if nothing found or scanning disabled).
     """
     if not is_security_enabled():
         return []
@@ -214,13 +215,35 @@ def _scan_fields(tool_name: str, data: Any) -> list[dict[str, Any]]:
         return []
 
     combined = "\n".join(texts)
+    results: list[dict[str, Any]] = []
 
     try:
-        from prompt_security import detect_suspicious_content
-        detections = detect_suspicious_content(combined)
-        return [d.to_dict() for d in detections]
+        from prompt_security import load_config
+        config = load_config()
     except Exception:
         return []
+
+    # Tier 1: Regex pattern detection
+    if config.detection_enabled:
+        try:
+            from prompt_security import detect_suspicious_content
+            custom_patterns = config.get_custom_patterns() or None
+            detections = detect_suspicious_content(combined, custom_patterns)
+            results.extend(d.to_dict() for d in detections)
+        except Exception:
+            pass
+
+    # Tier 2: Semantic similarity screening
+    if config.semantic_enabled:
+        try:
+            from prompt_security import screen_content_semantic
+            semantic_result = screen_content_semantic(combined, config)
+            if semantic_result and semantic_result.injection_detected:
+                results.append(semantic_result.to_dict())
+        except Exception:
+            pass
+
+    return results
 
 
 def save_response(

@@ -260,7 +260,14 @@ All content from Zendesk is treated as untrusted input and screened through a mu
 2. **Semantic matching** — fuzzy similarity against known injection templates
 3. **Haiku/LLM screening** — when configured, an LLM-based classifier for sophisticated attacks
 
-Every LLM-facing field (ticket subjects, comment bodies, user names, emails, org names, view titles) is wrapped with session-scoped security markers. Stored response files are also scanned at save time, with detection results preserved in file metadata.
+Every LLM-facing field (ticket subjects, comment bodies, user names, emails, org names, view titles) is wrapped with session-scoped security markers. Stored response files are also scanned at save time using both regex and semantic screening tiers, with detection results preserved in file metadata.
+
+**Attachment scanning** is size-aware:
+- Text files up to 1 MB are scanned inline through the full screening pipeline
+- Text files over 1 MB and binary files receive a security warning with a hint to scan manually using the CLI tool:
+  ```bash
+  uvx --from prompt-security-utils prompt-security-utils <file>
+  ```
 
 Security is **enabled by default**. Configure in `~/.config/zd-cli/config.json`:
 

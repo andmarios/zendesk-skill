@@ -9,7 +9,7 @@ from zendesk_skill import operations
 from zendesk_skill.client import ZendeskAuthError, ZendeskAPIError
 from zendesk_skill.queries import execute_jq, get_query
 from zendesk_skill.storage import load_response
-from zendesk_skill.utils.security import generate_markers, security_instructions, wrap_field, is_security_enabled
+from zendesk_skill.utils.security import generate_markers, security_instructions, wrap_external_data, is_security_enabled
 
 # Generate session markers once at server startup and register them.
 # The markers are delivered to the LLM via MCP InitializeResult.instructions
@@ -351,7 +351,9 @@ async def zendesk_query_stored(params: QueryStoredInput) -> str:
                     source_id = f"{tool}:{params_dict[key]}"
                     break
 
-            wrapped = wrap_field(result, "zendesk_query", source_id, _START, _END)
+            wrapped = wrap_external_data(result, "zendesk_query", source_id, _START, _END)
+            if wrapped is None:
+                return result
 
             detections = meta.get("security_detections", [])
             if detections:

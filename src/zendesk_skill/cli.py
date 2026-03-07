@@ -15,7 +15,7 @@ from zendesk_skill.client import ZendeskClientError
 from zendesk_skill.operations import get_session_markers
 from zendesk_skill.queries import execute_jq, get_queries_for_tool, get_query
 from zendesk_skill.storage import load_response
-from zendesk_skill.utils.security import wrap_field, is_security_enabled
+from zendesk_skill.utils.security import wrap_external_data, is_security_enabled
 
 # Main app
 app = typer.Typer(
@@ -964,13 +964,11 @@ def query_cmd(
             source_id = "unknown"
 
         start, end = get_session_markers()
-        wrapped = wrap_field(
-            json.dumps(parsed, default=str) if not isinstance(parsed, str) else parsed,
-            "zendesk_query",
-            source_id,
-            start,
-            end,
-        )
+        content_str = json.dumps(parsed, default=str) if not isinstance(parsed, str) else parsed
+        wrapped = wrap_external_data(content_str, "zendesk_query", source_id, start, end)
+        if wrapped is None:
+            output_json({"result": parsed})
+            return
 
         output_data: dict = {"result": wrapped}
         if detections:
