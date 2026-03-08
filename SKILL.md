@@ -10,10 +10,10 @@ A command-line interface for comprehensive Zendesk API integration. Run commands
 
 > **Running commands**
 >
-> - **Installed (recommended):** `uvx --from zendesk-skill zd-cli <command>`
+> - **Installed (recommended):** `uvx zd-cli <command>`
 > - **Development (cloned repo):** `uv run zd-cli <command>` from the repo directory
 >
-> Never use bare `python3 zd-cli` — dependencies won't be available. All examples below use `uv run zd-cli`; substitute `uvx --from zendesk-skill zd-cli` if running outside the repo.
+> Never use bare `python3 zd-cli` — dependencies won't be available. All examples below use `uv run zd-cli`; substitute `uvx zd-cli` if running outside the repo.
 
 ## Quick Start
 
@@ -710,7 +710,7 @@ Attachment scanning is size-aware:
 
 To manually scan files that were not scanned inline (large text, binary, or extracted text from PDFs/DOCX):
 ```bash
-uvx --from prompt-security-utils prompt-security-utils <file>
+uvx prompt-security-utils <file>
 ```
 
 ## Tips

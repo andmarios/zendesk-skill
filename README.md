@@ -19,13 +19,13 @@ A Claude Code skill for Zendesk Support integration. The primary interface is a 
 
 ```bash
 # Run directly (no install needed)
-uvx --from zendesk-skill zd-cli --help
+uvx zd-cli --help
 
 # Set up credentials (see Authentication below)
-uvx --from zendesk-skill zd-cli auth login
+uvx zd-cli auth login
 
 # Verify it works
-uvx --from zendesk-skill zd-cli me
+uvx zd-cli me
 ```
 
 ## Authentication
@@ -85,7 +85,7 @@ zd-cli auth logout-oauth    # OAuth token
 ### Via uvx (no install, recommended)
 
 ```bash
-uvx --from zendesk-skill zd-cli --help
+uvx zd-cli --help
 ```
 
 `uvx` runs the tool in an isolated environment on demand — nothing is permanently installed.
@@ -266,7 +266,7 @@ Every LLM-facing field (ticket subjects, comment bodies, user names, emails, org
 - Text files up to 1 MB are scanned inline through the full screening pipeline
 - Text files over 1 MB and binary files receive a security warning with a hint to scan manually using the CLI tool:
   ```bash
-  uvx --from prompt-security-utils prompt-security-utils <file>
+  uvx prompt-security-utils <file>
   ```
 
 Security is **enabled by default**. Configure in `~/.config/zd-cli/config.json`:
