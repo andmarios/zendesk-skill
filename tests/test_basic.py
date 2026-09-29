@@ -155,6 +155,44 @@ def test_get_named_query():
     assert ".data.comments" in query
 
 
+def test_comments_full_prefers_plain_body(tmp_path):
+    """comments_full must read plain_body: Zendesk's body drops nested list items."""
+    import json
+
+    from zendesk_skill.queries import execute_jq, get_query
+
+    data = {
+        "data": {
+            "comments": [
+                {
+                    "id": 1,
+                    "author_id": 10,
+                    "public": True,
+                    "created_at": "2026-09-28T15:48:02Z",
+                    "body": "4. Route events such that:\n\nThanks",
+                    "plain_body": "4. Route events such that:\n- upserts\n- inserts only\n\nThanks",
+                },
+                {
+                    "id": 2,
+                    "author_id": 11,
+                    "public": False,
+                    "created_at": "2026-09-28T16:00:00Z",
+                    "body": "body only",
+                },
+            ]
+        }
+    }
+    file_path = tmp_path / "ticket_details.json"
+    file_path.write_text(json.dumps(data))
+
+    success, output = execute_jq(str(file_path), get_query("ticket_details", "comments_full"))
+    assert success, output
+
+    comments = json.loads(output)
+    assert "inserts only" in comments[0]["body"]
+    assert comments[1]["body"] == "body only"
+
+
 def test_client_auth_header():
     """Test auth header building."""
     from zendesk_skill.client import _build_auth_header

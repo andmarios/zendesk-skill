@@ -38,8 +38,8 @@ QUERIES: dict[str, dict[str, dict[str, str]]] = {
             "query": ".data.comments | map({id, author_id, body: (.plain_body // .body | .[0:500]), public, created_at})",
         },
         "comments_full": {
-            "description": "Get full comment bodies",
-            "query": ".data.comments | map({id, author_id, body, public, created_at})",
+            "description": "Get full comment bodies (no HTML)",
+            "query": ".data.comments | map({id, author_id, body: (.plain_body // .body), public, created_at})",
         },
         "attachments": {
             "description": "List all attachments from comments",

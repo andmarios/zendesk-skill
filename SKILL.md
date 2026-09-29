@@ -206,7 +206,7 @@ After fetching data, use `zd-cli query` with these named queries:
 |-------|-------------|
 | `ticket_summary` | Get ticket without comments |
 | `comments_slim` | Comments with truncated body (no HTML) |
-| `comments_full` | Full comment bodies |
+| `comments_full` | Full comment bodies (no HTML) |
 | `attachments` | List all attachments from comments |
 | `comment_count` | Count by public/private |
 | `latest_comment` | Most recent comment |
