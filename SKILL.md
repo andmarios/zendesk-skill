@@ -211,6 +211,8 @@ After fetching data, use `zd-cli query` with these named queries:
 | `comment_count` | Count by public/private |
 | `latest_comment` | Most recent comment |
 
+> **Read the customer's full message from `comments_full`, not `ticket_summary`.** The ticket `description` (used by `ticket_summary`) drops list items nested inside a numbered list, and Zendesk offers no plain-text alternative for it. The first comment's `plain_body`, returned by `comments_full`, carries the complete text.
+
 ### For Search Results (`search`)
 | Query | Description |
 |-------|-------------|
