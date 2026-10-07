@@ -7,12 +7,12 @@ A Claude Code skill for Zendesk Support integration. The primary interface is a 
 ## Features
 
 - **Claude Code skill** — `SKILL.md` gives Claude full command documentation, workflows, and the save-first/query-later pattern
-- **CLI (`zd-cli`)** — 28 commands covering tickets, users, organizations, views, metrics, and more
+- **CLI (`zd-cli`)** — 29 commands covering tickets, users, organizations, views, metrics, and more
 - **MCP server** — alternative interface for other AI assistants
 - **Slack integration** — send formatted support reports to Slack channels
 - **Support metrics analysis** — response times, resolution rates, CSAT, after-hours and on-call tracking
 - **Local response storage** — API responses saved to temp directory, queryable with jq without re-fetching
-- **User name resolution** — saved ticket responses include `requester_name`, `assignee_name` and comment `author_name`, resolved in batches via `users/show_many`
+- **User name resolution** — saved ticket responses include `requester_name`, `assignee_name` and comment `author_name`, resolved in batches via `users/show_many`; custom fields get their `title` (and `value_label` for dropdown options) from the ticket field definitions
 - **Markdown formatting** — write operations convert Markdown to HTML for proper rendering in Agent Workspace
 - **Encrypted credentials** — API tokens and OAuth tokens encrypted at rest
 
@@ -120,6 +120,7 @@ Point Claude Code at `SKILL.md` to give Claude full command documentation and wo
 | `search "status:open priority:urgent"` | Search tickets |
 | `ticket 12345` | Get ticket by ID |
 | `ticket-details 12345` | Ticket + all comments |
+| `export-ticket 12345 --format html` | Whole ticket as a Markdown (`md`) or HTML document |
 | `linked-incidents 12345` | Incidents linked to a problem ticket |
 | `attachment --ticket 12345 <url>` | Download an attachment |
 

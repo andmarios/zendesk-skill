@@ -25,7 +25,7 @@ QUERIES: dict[str, dict[str, dict[str, str]]] = {
         },
         "custom_fields": {
             "description": "Get custom field values",
-            "query": ".data.ticket.custom_fields | map(select(.value != null))",
+            "query": ".data.ticket.custom_fields | map(select(.value != null and .value != \"\" and .value != []) | {id, title, type, value, value_label})",
         },
     },
     "ticket_details": {
