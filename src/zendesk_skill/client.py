@@ -738,6 +738,26 @@ class ZendeskClient:
         """Make a DELETE request."""
         return await self.request("DELETE", endpoint, timeout=timeout)
 
+    def _check_download_url(self, url: str) -> None:
+        """Only send credentials to this account's own Zendesk host over HTTPS.
+
+        Attachment URLs come from ticket data, so an arbitrary URL must never
+        receive the Authorization header.
+        """
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        expected = f"{self._auth_provider.subdomain}.zendesk.com".lower()
+        try:
+            port = parsed.port
+        except ValueError:
+            port = -1
+        if parsed.scheme != "https" or (parsed.hostname or "").lower() != expected or port not in (None, 443):
+            raise ZendeskClientError(
+                f"Refusing to download from {parsed.hostname or url!r}: "
+                f"only https://{expected}/ URLs are allowed (credentials are sent with the request)"
+            )
+
     async def download_file(
         self,
         url: str,
@@ -757,6 +777,8 @@ class ZendeskClient:
         Raises:
             ZendeskAPIError: On download errors
         """
+        self._check_download_url(url)
+
         # Downloads need redirect-following, use a dedicated client
         async with httpx.AsyncClient(
             follow_redirects=True,
