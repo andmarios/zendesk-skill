@@ -12,7 +12,7 @@ A Claude Code skill for Zendesk Support integration. The primary interface is a 
 - **Slack integration** — send formatted support reports to Slack channels
 - **Support metrics analysis** — response times, resolution rates, CSAT, after-hours and on-call tracking
 - **Local response storage** — API responses saved to temp directory, queryable with jq without re-fetching
-- **User name resolution** — saved ticket responses include `requester_name`, `assignee_name` and comment `author_name`, resolved in batches via `users/show_many`; custom fields get their `title` (and `value_label` for dropdown options) from the ticket field definitions
+- **User name resolution** — saved ticket responses include `requester_name`/`requester_email`, `assignee_name`, CC'd users and followers (`email_cc_users`, `follower_users`, each with name + email), and comment `author_name`, resolved in batches via `users/show_many`; custom fields get their `title` (and `value_label` for dropdown options) from the ticket field definitions
 - **Markdown formatting** — write operations convert Markdown to HTML for proper rendering in Agent Workspace
 - **Encrypted credentials** — API tokens and OAuth tokens encrypted at rest
 

@@ -84,14 +84,14 @@ def _get_client() -> ZendeskClient:
 SHOW_MANY_BATCH_SIZE = 100  # Zendesk show_many accepts at most 100 IDs per call
 
 
-async def _resolve_user_names(client: ZendeskClient, user_ids) -> dict[int, str]:
-    """Resolve user IDs to display names via batched users/show_many calls.
+async def _resolve_users(client: ZendeskClient, user_ids) -> dict[int, dict]:
+    """Resolve user IDs to {name, email} via batched users/show_many calls.
 
     Best effort: lookup failures (permissions, deleted users, network) never fail
     the calling operation; unresolved IDs are simply absent from the result.
     """
     ids = sorted({int(i) for i in user_ids if i})
-    names: dict[int, str] = {}
+    users: dict[int, dict] = {}
     for start in range(0, len(ids), SHOW_MANY_BATCH_SIZE):
         batch = ids[start:start + SHOW_MANY_BATCH_SIZE]
         try:
@@ -102,9 +102,15 @@ async def _resolve_user_names(client: ZendeskClient, user_ids) -> dict[int, str]
         except (ZendeskAPIError, ZendeskAuthError):
             continue
         for user in result.get("users", []):
-            if user.get("name"):
-                names[user["id"]] = user["name"]
-    return names
+            if user.get("name") or user.get("email"):
+                users[user["id"]] = {"name": user.get("name"), "email": user.get("email")}
+    return users
+
+
+async def _resolve_user_names(client: ZendeskClient, user_ids) -> dict[int, str]:
+    """Resolve user IDs to display names (see _resolve_users)."""
+    users = await _resolve_users(client, user_ids)
+    return {uid: u["name"] for uid, u in users.items() if u.get("name")}
 
 
 TICKET_FIELDS_TTL = 600  # seconds; ticket field definitions rarely change
@@ -171,15 +177,22 @@ def _name_summary(ticket: dict, ticket_id_str: str) -> dict:
     return out
 
 
+_PEOPLE_LISTS = (
+    ("email_cc_ids", "email_cc_users"),
+    ("follower_ids", "follower_users"),
+)
+
+
 async def _annotate_names(
     client: ZendeskClient,
     tickets: list[dict] | None = None,
     comments: list[dict] | None = None,
 ) -> dict[int, str]:
-    """Add requester_name/assignee_name to tickets and author_name to comments.
+    """Add people details to tickets and comments, in place.
 
-    Annotates the dicts in place (so the saved response file includes the names)
-    and returns the id -> name map for callers that want to summarize it.
+    Tickets gain requester_name/requester_email, assignee_name/assignee_email,
+    email_cc_users and follower_users (each a list of {id, name, email}).
+    Comments gain author_name. Returns the id -> name map.
     """
     tickets = tickets or []
     comments = comments or []
@@ -187,19 +200,39 @@ async def _annotate_names(
     for t in tickets:
         ids.add(t.get("requester_id"))
         ids.add(t.get("assignee_id"))
+        for ids_key, _ in _PEOPLE_LISTS:
+            ids.update(t.get(ids_key) or [])
+        ids.update(t.get("collaborator_ids") or [])
     for c in comments:
         ids.add(c.get("author_id"))
 
-    names = await _resolve_user_names(client, ids)
+    users = await _resolve_users(client, ids)
+
+    def person(uid):
+        return {"id": uid, **users[uid]}
+
     for t in tickets:
-        if t.get("requester_id") in names:
-            t["requester_name"] = names[t["requester_id"]]
-        if t.get("assignee_id") in names:
-            t["assignee_name"] = names[t["assignee_id"]]
+        for role in ("requester", "assignee"):
+            u = users.get(t.get(f"{role}_id"))
+            if u:
+                if u.get("name"):
+                    t[f"{role}_name"] = u["name"]
+                if u.get("email"):
+                    t[f"{role}_email"] = u["email"]
+        for ids_key, out_key in _PEOPLE_LISTS:
+            resolved = [person(i) for i in t.get(ids_key) or [] if i in users]
+            if resolved:
+                t[out_key] = resolved
+        # Accounts without the newer CC/follower split only populate collaborator_ids
+        if not t.get("email_cc_users") and not t.get("follower_users"):
+            legacy = [person(i) for i in t.get("collaborator_ids") or [] if i in users]
+            if legacy:
+                t["email_cc_users"] = legacy
     for c in comments:
-        if c.get("author_id") in names:
-            c["author_name"] = names[c["author_id"]]
-    return names
+        u = users.get(c.get("author_id"))
+        if u and u.get("name"):
+            c["author_name"] = u["name"]
+    return {uid: u["name"] for uid, u in users.items() if u.get("name")}
 
 
 def _validate_id(value: str, name: str = "ID") -> None:

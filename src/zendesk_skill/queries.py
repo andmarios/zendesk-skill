@@ -17,7 +17,11 @@ QUERIES: dict[str, dict[str, dict[str, str]]] = {
         },
         "requester": {
             "description": "Get ticket requester info",
-            "query": ".data.ticket | {requester_id, requester_name, submitter_id, assignee_id, assignee_name, organization_id}",
+            "query": ".data.ticket | {requester_id, requester_name, requester_email, submitter_id, assignee_id, assignee_name, assignee_email, organization_id, email_cc_users, follower_users}",
+        },
+        "ccs": {
+            "description": "Get CC'd users and followers (id, name, email)",
+            "query": ".data.ticket | {email_cc_users, follower_users}",
         },
         "tags": {
             "description": "Get ticket tags",

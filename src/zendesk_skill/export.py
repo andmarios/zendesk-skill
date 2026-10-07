@@ -38,19 +38,60 @@ def _comment_body(comment: dict) -> str:
     return (comment.get("plain_body") or comment.get("body") or "").strip()
 
 
+def _people(users: list[dict] | None) -> str:
+    """'Name <email>, Name <email>' for a list of {id, name, email} dicts."""
+    parts = []
+    for u in users or []:
+        name, email = u.get("name"), u.get("email")
+        parts.append(f"{name} <{email}>" if name and email else name or email or str(u.get("id")))
+    return ", ".join(parts)
+
+
+def _addresses(side: Any) -> list[str]:
+    """Email addresses from a via.source from/to value (dict, list of dicts, or other)."""
+    items = side if isinstance(side, list) else [side]
+    out = []
+    for item in items:
+        if isinstance(item, dict):
+            label = item.get("name")
+            addr = item.get("address")
+            out.append(f"{label} <{addr}>" if label and addr else addr or label)
+    return [o for o in out if o]
+
+
+def email_recipients(comment: dict) -> dict[str, list[str]]:
+    """From/To/CC addresses recorded on an email comment (empty for other channels)."""
+    source = (comment.get("via") or {}).get("source") or {}
+    to = source.get("to")
+    ccs = to.get("email_ccs") if isinstance(to, dict) else None
+    result = {
+        "From": _addresses(source.get("from")),
+        "To": _addresses(to),
+        "CC": [str(c) for c in ccs or []],
+    }
+    return {k: v for k, v in result.items() if v}
+
+
+def _recipient_line(comment: dict) -> str:
+    return " · ".join(f"{k}: {', '.join(v)}" for k, v in email_recipients(comment).items())
+
+
 def _meta(ticket: dict, extra: dict) -> list[tuple[str, str]]:
-    def person(name_key: str, id_key: str) -> str:
-        name, uid = ticket.get(name_key), ticket.get(id_key)
+    def person(name_key: str, id_key: str, email_key: str) -> str:
+        name, uid, email = ticket.get(name_key), ticket.get(id_key), ticket.get(email_key)
         if uid is None:
             return ""
-        return f"{name} ({uid})" if name else str(uid)
+        label = f"{name} ({uid})" if name else str(uid)
+        return f"{label} <{email}>" if email else label
 
     rows = [
         ("Status", ticket.get("status")),
         ("Priority", ticket.get("priority")),
         ("Type", ticket.get("type")),
-        ("Requester", person("requester_name", "requester_id")),
-        ("Assignee", person("assignee_name", "assignee_id") or "(unassigned)"),
+        ("Requester", person("requester_name", "requester_id", "requester_email")),
+        ("Assignee", person("assignee_name", "assignee_id", "assignee_email") or "(unassigned)"),
+        ("CC", _people(ticket.get("email_cc_users"))),
+        ("Followers", _people(ticket.get("follower_users"))),
         ("Organization", extra.get("organization_name") or ticket.get("organization_id")),
         ("Group", extra.get("group_name") or ticket.get("group_id")),
         ("Channel", (ticket.get("via") or {}).get("channel")),
@@ -94,6 +135,8 @@ def render_markdown(ticket: dict, comments: list[dict], extra: dict | None = Non
         channel = (c.get("via") or {}).get("channel")
         via = f" via {channel}" if channel else ""
         out += [f"### {i}. {who} — {kind}{via}", f"*{c.get('created_at')}*", ""]
+        if _recipient_line(c):
+            out += [f"*{_recipient_line(c)}*", ""]
         body = _comment_body(c) or "(empty)"
         out += [f"> {line}" if line else ">" for line in body.splitlines()]
         out.append("")
@@ -162,9 +205,11 @@ def render_html(ticket: dict, comments: list[dict], extra: dict | None = None) -
         channel = (c.get("via") or {}).get("channel")
         via = f" via {channel}" if channel else ""
         cls = "comment" if c.get("public") else "comment note"
+        recipients = _recipient_line(c)
+        recipients_html = f"<header>{_e(recipients)}</header>" if recipients else ""
         out.append(
             f'<div class="{cls}"><header>{i}. <strong>{_e(who)}</strong> — {_e(kind)}{_e(via)}'
-            f" · {_e(c.get('created_at'))}</header>"
+            f" · {_e(c.get('created_at'))}</header>{recipients_html}"
             f'<div class="body">{_e(_comment_body(c) or "(empty)")}</div>'
         )
         atts = _attachments(c)
