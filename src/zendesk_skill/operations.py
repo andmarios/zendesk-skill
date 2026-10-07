@@ -25,7 +25,7 @@ from zendesk_skill.client import (
 from zendesk_skill.export import normalize_format, render_html, render_markdown
 from zendesk_skill.formatting import format_for_zendesk
 from zendesk_skill.queries import get_queries_for_tool
-from zendesk_skill.storage import save_response
+from zendesk_skill.storage import _get_storage_dir, save_response, write_private_text
 from zendesk_skill.utils.security import (
     generate_markers,
     is_security_enabled,
@@ -440,10 +440,8 @@ async def export_ticket(
         path = Path(output_path).expanduser()
         path.parent.mkdir(parents=True, exist_ok=True)
     else:
-        from zendesk_skill.storage import _get_storage_dir
-
         path = _get_storage_dir(ticket_id) / f"ticket_{ticket_id}.{'html' if kind == 'html' else 'md'}"
-    path.write_text(content, encoding="utf-8")
+    write_private_text(path, content)  # customer data: owner-only (0600)
 
     out = {
         "id": ticket.get("id"),
@@ -524,14 +522,14 @@ async def download_attachment(
                 filename = "attachment"
 
         # Determine directory based on ticket_id (cross-platform, per-user)
-        from zendesk_skill.storage import DEFAULT_STORAGE_DIR
+        from zendesk_skill.storage import DEFAULT_STORAGE_DIR, ensure_private_dir
         base_dir = DEFAULT_STORAGE_DIR
         if ticket_id:
             attachments_dir = base_dir / ticket_id / "attachments"
         else:
             attachments_dir = base_dir / "attachments"
 
-        attachments_dir.mkdir(parents=True, exist_ok=True)
+        ensure_private_dir(attachments_dir)
 
         # Handle duplicate filenames by adding suffix
         out_path = attachments_dir / filename
