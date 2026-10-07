@@ -17,7 +17,7 @@ QUERIES: dict[str, dict[str, dict[str, str]]] = {
         },
         "requester": {
             "description": "Get ticket requester info",
-            "query": ".data.ticket | {requester_id, submitter_id, organization_id}",
+            "query": ".data.ticket | {requester_id, requester_name, submitter_id, assignee_id, assignee_name, organization_id}",
         },
         "tags": {
             "description": "Get ticket tags",
@@ -35,11 +35,11 @@ QUERIES: dict[str, dict[str, dict[str, str]]] = {
         },
         "comments_slim": {
             "description": "Get comments with only essential fields (no HTML)",
-            "query": ".data.comments | map({id, author_id, body: (.plain_body // .body | .[0:500]), public, created_at})",
+            "query": ".data.comments | map({id, author_id, author_name, body: (.plain_body // .body | .[0:500]), public, created_at})",
         },
         "comments_full": {
             "description": "Get full comment bodies (no HTML)",
-            "query": ".data.comments | map({id, author_id, body: (.plain_body // .body), public, created_at})",
+            "query": ".data.comments | map({id, author_id, author_name, body: (.plain_body // .body), public, created_at})",
         },
         "attachments": {
             "description": "List all attachments from comments",
@@ -51,11 +51,11 @@ QUERIES: dict[str, dict[str, dict[str, str]]] = {
         },
         "latest_comment": {
             "description": "Get the most recent comment",
-            "query": ".data.comments | last | {id, author_id, body: (.plain_body // .body | .[0:500]), public, created_at}",
+            "query": ".data.comments | last | {id, author_id, author_name, body: (.plain_body // .body | .[0:500]), public, created_at}",
         },
         "messages_by_author": {
             "description": "Count messages per author",
-            "query": ".data.comments | group_by(.author_id) | map({author_id: .[0].author_id, message_count: length, public_count: ([.[] | select(.public == true)] | length), private_count: ([.[] | select(.public == false)] | length)}) | sort_by(.message_count) | reverse",
+            "query": ".data.comments | group_by(.author_id) | map({author_id: .[0].author_id, author_name: .[0].author_name, message_count: length, public_count: ([.[] | select(.public == true)] | length), private_count: ([.[] | select(.public == false)] | length)}) | sort_by(.message_count) | reverse",
         },
         "conversation_stats": {
             "description": "Get conversation statistics",
@@ -77,7 +77,7 @@ QUERIES: dict[str, dict[str, dict[str, str]]] = {
         },
         "summary_list": {
             "description": "Get summary list of tickets",
-            "query": ".data.results | map({id, subject, status, priority, created_at})",
+            "query": ".data.results | map({id, subject, status, priority, requester_name, assignee_name, created_at})",
         },
         "by_status": {
             "description": "Group tickets by status",
@@ -89,7 +89,7 @@ QUERIES: dict[str, dict[str, dict[str, str]]] = {
         },
         "by_requester": {
             "description": "Group tickets by requester (customer)",
-            "query": ".data.results | group_by(.requester_id) | map({requester_id: .[0].requester_id, ticket_count: length, tickets: map(.id)}) | sort_by(.ticket_count) | reverse",
+            "query": ".data.results | group_by(.requester_id) | map({requester_id: .[0].requester_id, requester_name: .[0].requester_name, ticket_count: length, tickets: map(.id)}) | sort_by(.ticket_count) | reverse",
         },
         "by_organization": {
             "description": "Group tickets by organization",
@@ -97,7 +97,7 @@ QUERIES: dict[str, dict[str, dict[str, str]]] = {
         },
         "top_requesters": {
             "description": "Top 10 requesters by ticket count",
-            "query": ".data.results | group_by(.requester_id) | map({requester_id: .[0].requester_id, ticket_count: length}) | sort_by(.ticket_count) | reverse | .[0:10]",
+            "query": ".data.results | group_by(.requester_id) | map({requester_id: .[0].requester_id, requester_name: .[0].requester_name, ticket_count: length}) | sort_by(.ticket_count) | reverse | .[0:10]",
         },
         "top_organizations": {
             "description": "Top 10 organizations by ticket count",
@@ -170,7 +170,7 @@ QUERIES: dict[str, dict[str, dict[str, str]]] = {
         },
         "summary_list": {
             "description": "Get ticket summaries from view",
-            "query": ".data.tickets | map({id, subject, status, priority})",
+            "query": ".data.tickets | map({id, subject, status, priority, requester_name, assignee_name})",
         },
     },
     # Metrics queries

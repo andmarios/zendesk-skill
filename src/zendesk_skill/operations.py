@@ -79,6 +79,74 @@ def _get_client() -> ZendeskClient:
     return get_client()
 
 
+SHOW_MANY_BATCH_SIZE = 100  # Zendesk show_many accepts at most 100 IDs per call
+
+
+async def _resolve_user_names(client: ZendeskClient, user_ids) -> dict[int, str]:
+    """Resolve user IDs to display names via batched users/show_many calls.
+
+    Best effort: lookup failures (permissions, deleted users, network) never fail
+    the calling operation; unresolved IDs are simply absent from the result.
+    """
+    ids = sorted({int(i) for i in user_ids if i})
+    names: dict[int, str] = {}
+    for start in range(0, len(ids), SHOW_MANY_BATCH_SIZE):
+        batch = ids[start:start + SHOW_MANY_BATCH_SIZE]
+        try:
+            result = await client.get(
+                "users/show_many.json",
+                params={"ids": ",".join(str(i) for i in batch)},
+            )
+        except (ZendeskAPIError, ZendeskAuthError):
+            continue
+        for user in result.get("users", []):
+            if user.get("name"):
+                names[user["id"]] = user["name"]
+    return names
+
+
+def _name_summary(ticket: dict, ticket_id_str: str) -> dict:
+    """Wrapped requester/assignee names for a ticket summary (names are untrusted input)."""
+    out = {}
+    for field in ("requester_name", "assignee_name"):
+        if ticket.get(field):
+            out[field] = wrap_field_simple(
+                ticket[field], "ticket", ticket_id_str, *get_session_markers()
+            )
+    return out
+
+
+async def _annotate_names(
+    client: ZendeskClient,
+    tickets: list[dict] | None = None,
+    comments: list[dict] | None = None,
+) -> dict[int, str]:
+    """Add requester_name/assignee_name to tickets and author_name to comments.
+
+    Annotates the dicts in place (so the saved response file includes the names)
+    and returns the id -> name map for callers that want to summarize it.
+    """
+    tickets = tickets or []
+    comments = comments or []
+    ids = set()
+    for t in tickets:
+        ids.add(t.get("requester_id"))
+        ids.add(t.get("assignee_id"))
+    for c in comments:
+        ids.add(c.get("author_id"))
+
+    names = await _resolve_user_names(client, ids)
+    for t in tickets:
+        if t.get("requester_id") in names:
+            t["requester_name"] = names[t["requester_id"]]
+        if t.get("assignee_id") in names:
+            t["assignee_name"] = names[t["assignee_id"]]
+    for c in comments:
+        if c.get("author_id") in names:
+            c["author_name"] = names[c["author_id"]]
+    return names
+
+
 def _validate_id(value: str, name: str = "ID") -> None:
     """Validate that an ID is a positive integer string."""
     try:
@@ -126,6 +194,7 @@ async def search_tickets(
         params["sort_by"] = sort_by
 
     result = await client.get("search.json", params=params)
+    await _annotate_names(client, tickets=result.get("results", []))
     suggested = get_queries_for_tool("search")
     file_path, stored = save_response(
         "search", {"query": query}, result, suggested, output_path
@@ -156,6 +225,7 @@ async def get_ticket(
     client = _get_client()
 
     result = await client.get(f"tickets/{ticket_id}.json")
+    await _annotate_names(client, tickets=[result.get("ticket", {})])
     suggested = get_queries_for_tool("ticket")
     file_path, _ = save_response(
         "ticket", {"ticket_id": ticket_id}, result, suggested, output_path,
@@ -169,6 +239,7 @@ async def get_ticket(
         "subject": wrap_field_simple(ticket.get("subject"), "ticket", ticket_id_str, *get_session_markers()),
         "status": ticket.get("status"),
         "priority": ticket.get("priority"),
+        **_name_summary(ticket, ticket_id_str),
         "file_path": str(file_path),
     }
 
@@ -203,6 +274,7 @@ async def get_ticket_details(
         "ticket": result.get("ticket", {}),
         "comments": comments_result.get("comments", []),
     }
+    await _annotate_names(client, tickets=[combined["ticket"]], comments=combined["comments"])
 
     suggested = get_queries_for_tool("ticket_details")
     file_path, _ = save_response(
@@ -216,6 +288,7 @@ async def get_ticket_details(
         "id": ticket.get("id"),
         "subject": wrap_field_simple(ticket.get("subject"), "ticket", ticket_id_str, *get_session_markers()),
         "status": ticket.get("status"),
+        **_name_summary(ticket, ticket_id_str),
         "comment_count": len(combined["comments"]),
         "file_path": str(file_path),
         "suggested_queries": ["comments_slim", "attachments", "ticket_summary"],
@@ -238,6 +311,7 @@ async def get_linked_incidents(
     client = _get_client()
 
     result = await client.get(f"tickets/{ticket_id}/incidents.json")
+    await _annotate_names(client, tickets=result.get("tickets", []))
     suggested = get_queries_for_tool("linked_incidents")
     file_path, _ = save_response(
         "linked_incidents", {"ticket_id": ticket_id}, result, suggested, output_path,
@@ -818,6 +892,7 @@ async def get_view_tickets(
         f"views/{view_id}/tickets.json",
         params={"page": page, "per_page": per_page}
     )
+    await _annotate_names(client, tickets=result.get("tickets", []))
     suggested = get_queries_for_tool("view_tickets")
     file_path, _ = save_response(
         "view_tickets", {"view_id": view_id}, result, suggested, output_path
