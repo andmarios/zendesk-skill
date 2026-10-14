@@ -10,6 +10,7 @@ which the operations return in their result.
 """
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ from zendesk_skill.client import ZendeskAPIError, ZendeskAuthError, ZendeskClien
 SHOW_MANY_BATCH_SIZE = 100  # Zendesk show_many accepts at most 100 IDs per call
 FIELDS_CACHE_TTL = 3600  # seconds; ticket field definitions rarely change
 FIELDS_PAGE_LIMIT = 20  # hard cap: 2000 fields
+MISS_REFETCH_MIN_AGE = 60  # seconds; floor between refetches triggered by a cache miss
 
 # (ticket ids key, annotated key)
 PEOPLE_LISTS = (
@@ -140,30 +142,34 @@ def _cache_path(client: ZendeskClient) -> Path:
     return Path(storage.DEFAULT_STORAGE_DIR) / f"ticket_fields_{safe}.json"
 
 
-def _load_cached_fields(path: Path) -> dict[int, dict] | None:
+def _valid_definition(entry: Any) -> bool:
+    return (
+        isinstance(entry, dict)
+        and isinstance(entry.get("title"), (str, type(None)))
+        and isinstance(entry.get("type"), (str, type(None)))
+        and isinstance(entry.get("options"), dict)
+    )
+
+
+def _read_cache(path: Path) -> tuple[dict[int, dict], float] | None:
+    """Cached definitions and when they were fetched, or None if missing/stale/malformed.
+
+    Every entry is validated (a file from another version or a partial write must
+    never reach the labelling code); anything wrong just means "refetch".
+    """
     try:
         cached = json.loads(path.read_text())
-        if time.time() - cached["fetched_at"] < FIELDS_CACHE_TTL:
-            return {int(k): v for k, v in cached["fields"].items()}
-    except (OSError, ValueError, KeyError, TypeError):
-        pass  # missing/corrupt/stale cache: just refetch
-    return None
+        fetched_at = float(cached["fetched_at"])
+        fields = {int(k): v for k, v in cached["fields"].items()}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+    if time.time() - fetched_at >= FIELDS_CACHE_TTL or not all(_valid_definition(v) for v in fields.values()):
+        return None
+    return fields, fetched_at
 
 
-async def get_ticket_field_map(
-    client: ZendeskClient, warnings: list[str] | None = None
-) -> dict[int, dict]:
-    """Ticket field definitions (id -> title/type/option labels).
-
-    Cached on disk (in the private storage dir) because every CLI invocation is
-    a new process. Returns an empty map, with a warning, if the token cannot
-    read ticket fields.
-    """
-    path = _cache_path(client)
-    cached = _load_cached_fields(path)
-    if cached is not None:
-        return cached
-
+async def _fetch_fields(client: ZendeskClient, warnings: list[str] | None) -> dict[int, dict] | None:
+    """Fetch all ticket field definitions (bounded paging); None, with a warning, on failure."""
     fields: dict[int, dict] = {}
     try:
         for page in range(1, FIELDS_PAGE_LIMIT + 1):
@@ -180,27 +186,106 @@ async def get_ticket_field_map(
                 break
     except (ZendeskAPIError, ZendeskAuthError) as e:
         _warn(warnings, f"Could not read ticket field definitions ({e}); custom fields shown without names")
-        return {}
+        return None
+    return fields
 
+
+def _write_cache(path: Path, fields: dict[int, dict], warnings: list[str] | None) -> None:
     try:
         storage.ensure_private_dir(path.parent)
         storage.write_private_text(path, json.dumps({"fetched_at": time.time(), "fields": fields}))
     except OSError as e:
         _warn(warnings, f"Could not cache ticket field definitions ({e}); they will be refetched next time")
+
+
+def _has_value(value: Any) -> bool:
+    return value not in (None, "", [], False)
+
+
+def _is_miss(cf: dict, fields: dict[int, dict]) -> bool:
+    """Does this populated custom field show the definitions are out of date?
+
+    Either its field is unknown, or it is a dropdown whose value is not among the
+    known options (a field/option created after the definitions were cached).
+    """
+    value = cf.get("value")
+    if not _has_value(value):
+        return False  # unset fields are listed on every ticket; they prove nothing
+    info = fields.get(cf.get("id"))
+    if info is None:
+        return True
+    options = info["options"]
+    if not options:
+        return False
+    values = value if isinstance(value, list) else [value]
+    return any(v not in options for v in values)
+
+
+def _refresh_requested() -> bool:
+    return os.environ.get("ZD_REFRESH_FIELDS", "").lower() in ("1", "true", "yes")
+
+
+async def get_ticket_field_map(
+    client: ZendeskClient, warnings: list[str] | None = None, force: bool = False
+) -> dict[int, dict]:
+    """Ticket field definitions (id -> title/type/option labels), cached on disk.
+
+    Every CLI invocation is a new process, so the cache lives in the private
+    storage dir. Returns an empty map, with a warning, if the token cannot read
+    ticket fields.
+    """
+    path = _cache_path(client)
+    cached = None if force else _read_cache(path)
+    if cached is not None:
+        return cached[0]
+    fields = await _fetch_fields(client, warnings)
+    if fields is None:
+        return {}
+    _write_cache(path, fields, warnings)
     return fields
 
 
 async def annotate_custom_fields(
     client: ZendeskClient, tickets: list[dict], warnings: list[str] | None = None
 ) -> None:
-    """Add title/type (and value_label for dropdowns) to each ticket's custom_fields, in place."""
+    """Add title/type (and value_label for dropdowns) to each ticket's custom_fields, in place.
+
+    Definitions come from the on-disk cache. If a populated field or dropdown
+    value is not covered by them (created since they were cached) they are
+    refetched - straight-line code, at most ONCE per call, and only if the cache
+    is at least MISS_REFETCH_MIN_AGE old, so a field that can never be resolved
+    (deleted/inactive) costs at most one request a minute, not one per command.
+    ZD_REFRESH_FIELDS=1 forces a refresh (e.g. after a field was renamed).
+    """
     if not any(t.get("custom_fields") for t in tickets):
         return
-    field_map = await get_ticket_field_map(client, warnings)
+
+    path = _cache_path(client)
+    cached = None if _refresh_requested() else _read_cache(path)
+    if cached is not None:
+        fields, fetched_at = cached
+        fresh = False
+    else:
+        fetched = await _fetch_fields(client, warnings)
+        if fetched is None:
+            return
+        fields, fresh = fetched, True
+        _write_cache(path, fields, warnings)
+
+    if not fresh and time.time() - fetched_at >= MISS_REFETCH_MIN_AGE:
+        if any(_is_miss(cf, fields) for t in tickets for cf in t.get("custom_fields") or []):
+            refetched = await _fetch_fields(client, warnings)  # on failure keep the cached defs
+            if refetched is not None:
+                fields, fresh = refetched, True
+                _write_cache(path, fields, warnings)
+
+    unknown: set[int] = set()
     for t in tickets:
         for cf in t.get("custom_fields") or []:
-            info = field_map.get(cf.get("id"))
-            if not info:
+            info = fields.get(cf.get("id"))
+            if info is None:
+                if _has_value(cf.get("value")):
+                    unknown.add(cf.get("id"))
                 continue
             cf["title"] = info["title"]
             cf["type"] = info["type"]
@@ -209,6 +294,10 @@ async def annotate_custom_fields(
                 cf["value_label"] = [options.get(v, v) for v in value]
             elif options and value in options:
                 cf["value_label"] = options[value]
+
+    if unknown and fresh:  # only claim "no definition" when the definitions are current
+        ids = ", ".join(str(i) for i in sorted(unknown)[:10])
+        _warn(warnings, f"No definition found for custom field(s) {ids}; shown without names")
 
 
 def with_warnings(result: dict[str, Any], warnings: list[str]) -> dict[str, Any]:

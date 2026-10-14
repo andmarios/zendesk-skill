@@ -297,3 +297,191 @@ def test_people_fields_are_scanned():
     for path in storage.SCANNABLE_FIELDS["search"]:
         texts += storage._resolve_field_path(search, path)
     assert {"Dee", "Eve"} <= set(texts)
+
+
+# ------------------------------------------- stale definitions and refetching
+
+
+class MutableFields:
+    """A Zendesk whose ticket fields can change, and which fails the test on a runaway loop."""
+
+    def __init__(self, fields, max_calls=3):
+        self.fields = fields
+        self.calls = 0
+        self.max_calls = max_calls
+        self._auth_provider = type("A", (), {"subdomain": "acme"})()
+
+    async def get(self, endpoint, params=None, timeout=None):
+        assert endpoint == "ticket_fields.json", endpoint
+        self.calls += 1
+        assert self.calls <= self.max_calls, "runaway ticket_fields refetching"
+        return {"ticket_fields": self.fields}
+
+
+def _age(store, seconds):
+    cache = next(store.glob("ticket_fields_*.json"))
+    data = json.loads(cache.read_text())
+    data["fetched_at"] -= seconds
+    cache.write_text(json.dumps(data))
+
+
+def _field(id_, title, options=()):
+    return {"id": id_, "title": title, "type": "tagger",
+            "custom_field_options": [{"name": n, "value": v} for v, n in options]}
+
+
+async def _prime(client, store, age=0):
+    await enrich.annotate_custom_fields(client, [{"custom_fields": [{"id": 100, "value": "a"}]}])
+    if age:
+        _age(store, age)
+    client.calls = 0
+
+
+@pytest.mark.asyncio
+async def test_new_field_created_since_caching_triggers_one_refetch(store):
+    client = MutableFields([_field(100, "Product", [("a", "A")])])
+    await _prime(client, store, age=120)
+    client.fields = [_field(100, "Product", [("a", "A")]), _field(103, "Brand new")]
+
+    ticket = {"custom_fields": [{"id": 100, "value": "a"}, {"id": 103, "value": "hello"}]}
+    warnings = []
+    await enrich.annotate_custom_fields(client, [ticket], warnings)
+
+    assert client.calls == 1
+    assert ticket["custom_fields"][1]["title"] == "Brand new"
+    assert warnings == []
+
+
+@pytest.mark.asyncio
+async def test_new_dropdown_option_triggers_a_refetch(store):
+    client = MutableFields([_field(100, "Product", [("a", "A")])])
+    await _prime(client, store, age=120)
+    client.fields = [_field(100, "Product", [("a", "A"), ("b", "B")])]
+
+    ticket = {"custom_fields": [{"id": 100, "value": "b"}]}
+    await enrich.annotate_custom_fields(client, [ticket])
+
+    assert client.calls == 1 and ticket["custom_fields"][0]["value_label"] == "B"
+
+
+@pytest.mark.asyncio
+async def test_new_multiselect_option_triggers_a_refetch(store):
+    client = MutableFields([_field(100, "OS", [("mac", "macOS")])])
+    await _prime(client, store, age=120)
+    client.fields = [_field(100, "OS", [("mac", "macOS"), ("win", "Windows")])]
+
+    ticket = {"custom_fields": [{"id": 100, "value": ["mac", "win"]}]}
+    await enrich.annotate_custom_fields(client, [ticket])
+
+    assert client.calls == 1 and ticket["custom_fields"][0]["value_label"] == ["macOS", "Windows"]
+
+
+@pytest.mark.asyncio
+async def test_refetch_is_rate_limited_for_a_recent_cache(store):
+    client = MutableFields([_field(100, "Product", [("a", "A")])])
+    await _prime(client, store, age=5)  # cached 5s ago
+    client.fields = [_field(100, "Product", [("a", "A")]), _field(103, "Brand new")]
+
+    ticket = {"custom_fields": [{"id": 103, "value": "x"}]}
+    await enrich.annotate_custom_fields(client, [ticket])
+
+    assert client.calls == 0                       # too soon: no refetch
+    assert "title" not in ticket["custom_fields"][0]
+
+
+@pytest.mark.asyncio
+async def test_unresolvable_field_costs_one_fetch_then_waits_out_the_floor(store):
+    """A field that never resolves (deleted/inactive) must not refetch on every command."""
+    client = MutableFields([_field(100, "Product", [("a", "A")])])
+    await _prime(client, store, age=120)
+    tickets = [{"custom_fields": [{"id": 999, "value": "ghost"}]} for _ in range(1000)]
+    warnings = []
+
+    await enrich.annotate_custom_fields(client, tickets, warnings)   # 1 refetch for 1000 tickets
+    assert client.calls == 1
+    assert len(warnings) == 1 and "999" in warnings[0]
+
+    for _ in range(5):                                               # later commands, same cache
+        await enrich.annotate_custom_fields(client, [{"custom_fields": [{"id": 999, "value": "ghost"}]}])
+    assert client.calls == 1                                         # cache is fresh: floor holds
+
+    _age(store, 120)                                                 # a minute+ later: one more, not a storm
+    await enrich.annotate_custom_fields(client, [{"custom_fields": [{"id": 999, "value": "ghost"}]}])
+    assert client.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_unset_fields_never_cause_a_refetch(store):
+    client = MutableFields([_field(100, "Product", [("a", "A")])])
+    await _prime(client, store, age=120)
+
+    ticket = {"custom_fields": [{"id": 555, "value": None}, {"id": 556, "value": ""}, {"id": 557, "value": []}]}
+    await enrich.annotate_custom_fields(client, [ticket])
+
+    assert client.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_failed_refetch_keeps_the_cached_definitions_and_warns(store):
+    client = MutableFields([_field(100, "Product", [("a", "A")])])
+    await _prime(client, store, age=120)
+
+    async def get(endpoint, params=None, timeout=None):
+        client.calls += 1
+        raise ZendeskAPIError("HTTP 500: down", 500)
+
+    client.get = get
+    ticket = {"custom_fields": [{"id": 100, "value": "a"}, {"id": 103, "value": "x"}]}
+    warnings = []
+    await enrich.annotate_custom_fields(client, [ticket], warnings)
+
+    assert client.calls == 1
+    assert ticket["custom_fields"][0]["title"] == "Product"          # cached defs still used
+    assert any("Could not read ticket field definitions" in w for w in warnings)
+
+
+@pytest.mark.asyncio
+async def test_zd_refresh_fields_forces_a_refetch_to_pick_up_renames(store, monkeypatch):
+    client = MutableFields([_field(100, "Product", [("a", "A")])])
+    await _prime(client, store)                                      # fresh cache
+    client.fields = [_field(100, "Product (renamed)", [("a", "A")])]
+
+    ticket = {"custom_fields": [{"id": 100, "value": "a"}]}
+    await enrich.annotate_custom_fields(client, [ticket])
+    assert ticket["custom_fields"][0]["title"] == "Product"          # rename not visible yet
+
+    monkeypatch.setenv("ZD_REFRESH_FIELDS", "1")
+    await enrich.annotate_custom_fields(client, [ticket])
+    assert ticket["custom_fields"][0]["title"] == "Product (renamed)"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_fields", [
+    {"100": {"title": "Product", "type": "tagger"}},                  # no "options" (other version)
+    {"100": {"title": 5, "type": "tagger", "options": {}}},           # wrong type
+    {"100": "oops"},                                                  # not a dict
+    {"abc": {"title": "x", "type": "t", "options": {}}},              # non-numeric id
+])
+async def test_malformed_cache_is_refetched_not_crashed_on(store, bad_fields):
+    client = MutableFields([_field(100, "Product", [("a", "A")])])
+    await _prime(client, store)
+    cache = next(store.glob("ticket_fields_*.json"))
+    cache.write_text(json.dumps({"fetched_at": __import__("time").time(), "fields": bad_fields}))
+
+    ticket = {"custom_fields": [{"id": 100, "value": "a"}]}
+    await enrich.annotate_custom_fields(client, [ticket])
+
+    assert client.calls == 1
+    assert ticket["custom_fields"][0]["title"] == "Product"
+
+
+@pytest.mark.asyncio
+async def test_refetch_never_recurses_or_loops(store):
+    """Whatever the data looks like, one call makes at most 2 requests (cache miss + one refetch)."""
+    client = MutableFields([_field(100, "Product", [("a", "A")])], max_calls=2)
+    await _prime(client, store, age=120)
+    pathological = [{"custom_fields": [{"id": i, "value": "v"} for i in range(500)]}] * 50
+
+    await enrich.annotate_custom_fields(client, pathological)
+
+    assert client.calls <= 2
