@@ -251,6 +251,16 @@ async def get_linked_incidents(
     }
 
 
+def _safe_filename(raw: str, default: str = "attachment") -> str:
+    """Reduce an untrusted attachment name to a bare filename.
+
+    Attachment names come from URLs and ticket content, so they must not be able
+    to point outside the download directory (e.g. "../../.zshrc" or "/etc/x").
+    """
+    name = raw.replace("\\", "/").split("/")[-1].replace("\x00", "").strip()
+    return default if name in ("", ".", "..") else name
+
+
 async def download_attachment(
     content_url: str,
     ticket_id: str | None = None,
@@ -279,17 +289,16 @@ async def download_attachment(
         query_params = parse_qs(parsed.query)
 
         if "name" in query_params:
-            filename = unquote(query_params["name"][0])
+            filename = _safe_filename(unquote(query_params["name"][0]))
         else:
             # Fallback: try to get from path
-            filename = parsed.path.split("/")[-1]
-            if not filename:
-                filename = "attachment"
+            filename = _safe_filename(unquote(parsed.path.split("/")[-1]))
 
         # Determine directory based on ticket_id (cross-platform, per-user)
         from zendesk_skill.storage import DEFAULT_STORAGE_DIR
         base_dir = DEFAULT_STORAGE_DIR
         if ticket_id:
+            _validate_id(ticket_id, "ticket_id")
             attachments_dir = base_dir / ticket_id / "attachments"
         else:
             attachments_dir = base_dir / "attachments"
@@ -298,6 +307,8 @@ async def download_attachment(
 
         # Handle duplicate filenames by adding suffix
         out_path = attachments_dir / filename
+        if out_path.resolve().parent != attachments_dir.resolve():
+            raise ValueError(f"Unsafe attachment filename: {filename!r}")
         if out_path.exists():
             stem = out_path.stem
             suffix = out_path.suffix
