@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import stat
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -13,6 +14,39 @@ from zendesk_skill.utils.security import is_security_enabled
 
 # Default storage directory (cross-platform, per-user to avoid conflicts)
 DEFAULT_STORAGE_DIR = Path(tempfile.gettempdir()) / f"zd-cli-{os.getuid()}"
+
+
+def ensure_private_dir(path: Path) -> Path:
+    """Create a directory readable only by the current user (0700).
+
+    Saved responses contain customer data. Paths under DEFAULT_STORAGE_DIR get
+    0700 at every level; if that shared base already exists but is a symlink or
+    owned by someone else (a pre-created /tmp path), refuse to use it.
+    """
+    base = DEFAULT_STORAGE_DIR
+    if path != base and base not in path.parents:
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    base.mkdir(mode=0o700, exist_ok=True)
+    if base.is_symlink() or base.lstat().st_uid != os.getuid():
+        raise PermissionError(f"Refusing to use {base}: not a directory owned by the current user")
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    d = path
+    while True:
+        os.chmod(d, 0o700)
+        if d == base:
+            return path
+        d = d.parent
+
+
+def write_private_text(path: Path | str, content: str, encoding: str = "utf-8") -> None:
+    """Write a file readable only by the current user (0600), even if it already existed."""
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding=encoding) as f:
+        if stat.S_ISREG(os.fstat(f.fileno()).st_mode):  # skip devices such as /dev/null
+            os.fchmod(f.fileno(), 0o600)
+        f.write(content)
 
 
 def _get_storage_dir(ticket_id: str | None = None) -> Path:
@@ -28,8 +62,7 @@ def _get_storage_dir(ticket_id: str | None = None) -> Path:
         storage_dir = DEFAULT_STORAGE_DIR / str(ticket_id)
     else:
         storage_dir = DEFAULT_STORAGE_DIR
-    storage_dir.mkdir(parents=True, exist_ok=True)
-    return storage_dir
+    return ensure_private_dir(storage_dir)
 
 
 def _generate_filename(tool_name: str, params: dict[str, Any]) -> str:
@@ -149,21 +182,36 @@ def _count_items(data: Any) -> int:
 
 
 # Fields to scan for suspicious content, keyed by tool_name.
+def _people_paths(prefix: str) -> list[str]:
+    """Scan paths for resolved people fields under a ticket-shaped prefix.
+
+    Display names come from attacker-controllable sources (e.g. an email From
+    header), so they are scanned like any other free text.
+    """
+    return [
+        f"{prefix}.requester_name",
+        f"{prefix}.assignee_name",
+        f"{prefix}.email_cc_users[].name",
+        f"{prefix}.follower_users[].name",
+    ]
+
+
 SCANNABLE_FIELDS: dict[str, list[str]] = {
-    "ticket": ["ticket.subject", "ticket.description"],
+    "ticket": ["ticket.subject", "ticket.description", *_people_paths("ticket")],
     "ticket_details": [
         "ticket.subject", "ticket.description",
-        "comments[].body", "comments[].plain_body",
+        "comments[].body", "comments[].plain_body", "comments[].author_name",
+        *_people_paths("ticket"),
     ],
-    "search": ["results[].subject", "results[].description"],
+    "search": ["results[].subject", "results[].description", *_people_paths("results[]")],
     "user": ["user.name", "user.notes"],
     "search_users": ["users[].name"],
     "organization": ["organization.name", "organization.notes"],
     "search_organizations": ["organizations[].name"],
     "satisfaction_rating": ["satisfaction_rating.comment"],
     "satisfaction_ratings": ["satisfaction_ratings[].comment"],
-    "linked_incidents": ["tickets[].subject"],
-    "view_tickets": ["tickets[].subject", "tickets[].description"],
+    "linked_incidents": ["tickets[].subject", *_people_paths("tickets[]")],
+    "view_tickets": ["tickets[].subject", "tickets[].description", *_people_paths("tickets[]")],
 }
 
 
@@ -270,7 +318,7 @@ def save_response(
     # Determine output path
     if output_path:
         file_path = Path(output_path)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_private_dir(file_path.parent)
     else:
         storage_dir = _get_storage_dir(ticket_id)
         filename = _generate_filename(tool_name, params)
@@ -299,8 +347,7 @@ def save_response(
         stored_data["metadata"]["security_detections"] = detections
 
     # Write to file
-    with open(file_path, "w") as f:
-        json.dump(stored_data, f, indent=2, default=str)
+    write_private_text(file_path, json.dumps(stored_data, indent=2, default=str))
 
     return str(file_path), stored_data
 

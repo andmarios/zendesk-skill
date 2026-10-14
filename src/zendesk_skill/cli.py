@@ -557,6 +557,22 @@ def ticket_details_cmd(
     output_json(result)
 
 
+@app.command("export-ticket")
+@zendesk_command
+def export_ticket_cmd(
+    ticket_id: Annotated[str, typer.Argument(help="Ticket ID")],
+    fmt: Annotated[str, typer.Option("--format", "-f", help="Output format: md or html")] = "md",
+    output_path: Annotated[str | None, typer.Option("--output", "-o", help="Output file path")] = None,
+    stdout: Annotated[bool, typer.Option("--stdout", help="Print the document to stdout instead of a JSON summary")] = False,
+) -> None:
+    """Export a whole ticket (details, named custom fields, full conversation) as Markdown or HTML."""
+    result = run_async(operations.export_ticket(ticket_id, fmt, output_path, include_content=stdout))
+    if stdout:
+        print(result["content"], end="")
+    else:
+        output_json(result)
+
+
 @app.command("linked-incidents")
 @zendesk_command
 def linked_incidents_cmd(
