@@ -220,22 +220,37 @@ def _count_items(data: Any) -> int:
     return 0
 
 
+def _people_paths(prefix: str) -> list[str]:
+    """Scan paths for resolved people fields under a ticket-shaped prefix.
+
+    Display names come from attacker-controllable sources (e.g. an email From
+    header), so they are scanned like any other free text.
+    """
+    return [
+        f"{prefix}.requester_name",
+        f"{prefix}.assignee_name",
+        f"{prefix}.email_cc_users[].name",
+        f"{prefix}.follower_users[].name",
+    ]
+
+
 # Fields to scan for suspicious content, keyed by tool_name.
 SCANNABLE_FIELDS: dict[str, list[str]] = {
-    "ticket": ["ticket.subject", "ticket.description"],
+    "ticket": ["ticket.subject", "ticket.description", *_people_paths("ticket")],
     "ticket_details": [
         "ticket.subject", "ticket.description",
-        "comments[].body", "comments[].plain_body",
+        "comments[].body", "comments[].plain_body", "comments[].author_name",
+        *_people_paths("ticket"),
     ],
-    "search": ["results[].subject", "results[].description"],
+    "search": ["results[].subject", "results[].description", *_people_paths("results[]")],
     "user": ["user.name", "user.notes"],
     "search_users": ["users[].name"],
     "organization": ["organization.name", "organization.notes"],
     "search_organizations": ["organizations[].name"],
     "satisfaction_rating": ["satisfaction_rating.comment"],
     "satisfaction_ratings": ["satisfaction_ratings[].comment"],
-    "linked_incidents": ["tickets[].subject"],
-    "view_tickets": ["tickets[].subject", "tickets[].description"],
+    "linked_incidents": ["tickets[].subject", *_people_paths("tickets[]")],
+    "view_tickets": ["tickets[].subject", "tickets[].description", *_people_paths("tickets[]")],
 }
 
 
