@@ -295,7 +295,7 @@ async def download_attachment(
             filename = _safe_filename(unquote(parsed.path.split("/")[-1]))
 
         # Determine directory based on ticket_id (cross-platform, per-user)
-        from zendesk_skill.storage import DEFAULT_STORAGE_DIR
+        from zendesk_skill.storage import DEFAULT_STORAGE_DIR, ensure_private_dir
         base_dir = DEFAULT_STORAGE_DIR
         if ticket_id:
             _validate_id(ticket_id, "ticket_id")
@@ -303,7 +303,7 @@ async def download_attachment(
         else:
             attachments_dir = base_dir / "attachments"
 
-        attachments_dir.mkdir(parents=True, exist_ok=True)
+        ensure_private_dir(attachments_dir)
 
         # Handle duplicate filenames by adding suffix
         out_path = attachments_dir / filename

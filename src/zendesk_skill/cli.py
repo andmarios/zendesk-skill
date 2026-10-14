@@ -58,6 +58,8 @@ def zendesk_command(func: Callable) -> Callable:
             return func(*args, **kwargs)
         except (ZendeskClientError, ValueError) as e:
             output_error(str(e))
+        except OSError as e:  # includes StorageError; report instead of a traceback
+            output_error(f"File system error: {e}")
     return wrapper
 
 

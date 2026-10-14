@@ -3,6 +3,8 @@
 import hashlib
 import json
 import os
+import stat
+import sys
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -13,6 +15,72 @@ from zendesk_skill.utils.security import is_security_enabled
 
 # Default storage directory (cross-platform, per-user to avoid conflicts)
 DEFAULT_STORAGE_DIR = Path(tempfile.gettempdir()) / f"zd-cli-{os.getuid()}"
+
+
+class StorageError(OSError):
+    """A local storage location cannot be used safely (refused or could not be secured)."""
+
+
+def _warn(message: str) -> None:
+    """Report a non-fatal problem on stderr (stdout carries the JSON results)."""
+    print(f"warning: {message}", file=sys.stderr)
+
+
+def ensure_private_dir(path: Path) -> Path:
+    """Create a directory readable only by the current user (0700).
+
+    Saved responses contain customer data. Paths under DEFAULT_STORAGE_DIR get
+    0700 at every level that is part of the store; nothing outside it is ever
+    chmod-ed. Containment is decided on the normalized path (so ``..`` cannot
+    sneak out) and re-checked on the symlink-resolved path before anything is
+    created. If the shared base already exists but is a symlink or owned by
+    someone else (a pre-created /tmp path), refuse to use it.
+
+    Raises StorageError (never fails silently) if the directory is refused or
+    cannot be secured.
+    """
+    base = Path(os.path.abspath(DEFAULT_STORAGE_DIR))
+    normalized = Path(os.path.abspath(path))
+    if normalized != base and base not in normalized.parents:
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    try:
+        base.mkdir(mode=0o700, exist_ok=True)
+        if base.is_symlink() or base.lstat().st_uid != os.getuid():
+            raise StorageError(f"Refusing to use {base}: not a directory owned by the current user")
+
+        real_base, real_path = base.resolve(), normalized.resolve()
+        if real_path != real_base and real_base not in real_path.parents:
+            raise StorageError(f"Refusing to use {path}: it resolves outside {base}")
+
+        real_path.mkdir(mode=0o700, parents=True, exist_ok=True)
+        d = real_path
+        while True:
+            os.chmod(d, 0o700)
+            if d == real_base:
+                return path
+            d = d.parent
+    except StorageError:
+        raise
+    except OSError as e:
+        raise StorageError(f"Cannot create a private directory at {path}: {e}") from e
+
+
+def write_private_text(path: Path | str, content: str, encoding: str = "utf-8") -> None:
+    """Write a file readable only by the current user (0600), even if it already existed.
+
+    Failing to tighten permissions is reported on stderr, not ignored; failing to
+    write at all raises (OSError).
+    """
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding=encoding) as f:
+        if stat.S_ISREG(os.fstat(f.fileno()).st_mode):  # skip devices such as /dev/null
+            try:
+                os.fchmod(f.fileno(), 0o600)
+            except OSError as e:
+                _warn(f"could not restrict permissions on {path}: {e}")
+        f.write(content)
 
 
 def _get_storage_dir(ticket_id: str | None = None) -> Path:
@@ -28,8 +96,7 @@ def _get_storage_dir(ticket_id: str | None = None) -> Path:
         storage_dir = DEFAULT_STORAGE_DIR / str(ticket_id)
     else:
         storage_dir = DEFAULT_STORAGE_DIR
-    storage_dir.mkdir(parents=True, exist_ok=True)
-    return storage_dir
+    return ensure_private_dir(storage_dir)
 
 
 def _generate_filename(tool_name: str, params: dict[str, Any]) -> str:
@@ -270,7 +337,7 @@ def save_response(
     # Determine output path
     if output_path:
         file_path = Path(output_path)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_private_dir(file_path.parent)
     else:
         storage_dir = _get_storage_dir(ticket_id)
         filename = _generate_filename(tool_name, params)
@@ -299,8 +366,7 @@ def save_response(
         stored_data["metadata"]["security_detections"] = detections
 
     # Write to file
-    with open(file_path, "w") as f:
-        json.dump(stored_data, f, indent=2, default=str)
+    write_private_text(file_path, json.dumps(stored_data, indent=2, default=str))
 
     return str(file_path), stored_data
 
