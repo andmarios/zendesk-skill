@@ -3,6 +3,8 @@
 import base64
 import json
 import os
+import stat
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -796,7 +798,13 @@ class ZendeskClient:
                 output_path.parent.mkdir(parents=True, exist_ok=True)
 
                 # Write file
-                with open(output_path, "wb") as f:
+                fd = os.open(str(output_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "wb") as f:
+                    if stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+                        try:
+                            os.fchmod(f.fileno(), 0o600)  # customer data: owner-only
+                        except OSError as e:
+                            print(f"warning: could not restrict permissions on {output_path}: {e}", file=sys.stderr)
                     f.write(response.content)
 
                 return output_path

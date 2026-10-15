@@ -291,6 +291,10 @@ zd-cli security-info --instructions
 
 Requires [`prompt-security-utils`](https://pypi.org/project/prompt-security-utils/) (included as a dependency).
 
+### Local file permissions
+
+Saved responses, exports and downloaded attachments contain customer data, so they are written owner-only: directories `0700`, files `0600`. The tool refuses to use `/tmp/zd-cli-$UID/` if it is a symlink or owned by another user, and it never changes permissions on anything outside that directory. If a directory cannot be secured the command fails with a `File system error` message; if only a file's mode cannot be tightened, a warning is printed on stderr.
+
 ## MCP Server
 
 The MCP server exposes the same functionality for AI assistants that support the Model Context Protocol.
