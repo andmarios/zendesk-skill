@@ -2,6 +2,7 @@
 
 import os
 import stat
+from pathlib import Path
 
 import pytest
 
@@ -23,7 +24,7 @@ def test_dirs_and_files_are_owner_only(base):
     path, _ = storage.save_response("ticket", {"ticket_id": "1"}, {"ticket": {}}, ticket_id="1")
     assert mode(base) == 0o700
     assert mode(base / "1") == 0o700
-    assert mode(path if not isinstance(path, str) else __import__("pathlib").Path(path)) == 0o600
+    assert mode(Path(path)) == 0o600
 
 
 def test_existing_loose_permissions_are_tightened(base):
@@ -69,8 +70,16 @@ def test_dotdot_cannot_chmod_outside_the_store(base, tmp_path):
 
 
 def test_dotdot_inside_the_store_is_still_private(base):
-    storage.ensure_private_dir(base / "a" / ".." / "b")
+    assert storage.ensure_private_dir(base / "a" / ".." / "b") == base / "b"
     assert mode(base / "b") == 0o700
+
+
+def test_output_path_with_dotdot_inside_the_store_is_written_where_it_was_secured(base):
+    """Regression: the raw path climbs out of a missing directory, which the kernel can't resolve."""
+    path, _ = storage.save_response("ticket", {}, {"ticket": {}}, output_path=str(base / "nope" / ".." / "out.json"))
+
+    assert Path(path) == base / "out.json"
+    assert mode(Path(path)) == 0o600
 
 
 def test_symlink_component_escaping_the_store_is_refused(base, tmp_path):

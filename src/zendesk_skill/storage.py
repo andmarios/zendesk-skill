@@ -36,6 +36,11 @@ def ensure_private_dir(path: Path) -> Path:
     created. If the shared base already exists but is a symlink or owned by
     someone else (a pre-created /tmp path), refuse to use it.
 
+    Returns the directory to write into. Inside the store that is the
+    normalized path that was checked and secured, so callers must use the
+    return value: the raw path may contain ``..`` the kernel resolves
+    differently (or not at all, if a component is missing).
+
     Raises StorageError (never fails silently) if the directory is refused or
     cannot be secured.
     """
@@ -59,7 +64,7 @@ def ensure_private_dir(path: Path) -> Path:
         while True:
             os.chmod(d, 0o700)
             if d == real_base:
-                return path
+                return normalized
             d = d.parent
     except StorageError:
         raise
@@ -337,7 +342,7 @@ def save_response(
     # Determine output path
     if output_path:
         file_path = Path(output_path)
-        ensure_private_dir(file_path.parent)
+        file_path = ensure_private_dir(file_path.parent) / file_path.name
     else:
         storage_dir = _get_storage_dir(ticket_id)
         filename = _generate_filename(tool_name, params)

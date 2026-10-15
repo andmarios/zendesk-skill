@@ -303,7 +303,7 @@ async def download_attachment(
         else:
             attachments_dir = base_dir / "attachments"
 
-        ensure_private_dir(attachments_dir)
+        attachments_dir = ensure_private_dir(attachments_dir)
 
         # Handle duplicate filenames by adding suffix
         out_path = attachments_dir / filename
