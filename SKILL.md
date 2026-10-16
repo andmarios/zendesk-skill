@@ -12,6 +12,7 @@ A command-line interface for comprehensive Zendesk API integration. Run commands
 >
 > - **Installed (recommended):** `uvx zd-cli <command>`
 > - **Development (cloned repo):** `uv run zd-cli <command>` from the repo directory
+> - **Missing `uvx` or `jq`:** suggest the user install them (macOS: `brew install uv jq`)
 >
 > Never use bare `python3 zd-cli` — dependencies won't be available. All examples below use `uv run zd-cli`; substitute `uvx zd-cli` if running outside the repo.
 

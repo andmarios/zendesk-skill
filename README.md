@@ -82,6 +82,8 @@ zd-cli auth logout-oauth    # OAuth token
 
 ## Installation
 
+**Prerequisites:** Python 3.12+, [uv](https://github.com/astral-sh/uv), and `jq` (for the `query` command). On macOS, `brew install uv jq` installs both.
+
 ### Via uvx (no install, recommended)
 
 ```bash
@@ -93,8 +95,9 @@ uvx zd-cli --help
 ### Via uv tool install
 
 ```bash
-uv tool install zendesk-skill
+uv tool install zd-cli
 zd-cli --help
+uv tool upgrade zd-cli    # later, to update
 ```
 
 ### Development / Claude Code skill
@@ -107,8 +110,6 @@ uv run zd-cli --help
 ```
 
 Point Claude Code at `SKILL.md` to give Claude full command documentation and workflows.
-
-**Prerequisites:** Python 3.12+, [uv](https://github.com/astral-sh/uv), and `jq` (for the `query` command).
 
 ## Commands
 
