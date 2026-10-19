@@ -192,8 +192,8 @@ async def _fetch_fields(client: ZendeskClient, warnings: list[str] | None) -> di
 
 def _write_cache(path: Path, fields: dict[int, dict], warnings: list[str] | None) -> None:
     try:
-        storage.ensure_private_dir(path.parent)
-        storage.write_private_text(path, json.dumps({"fetched_at": time.time(), "fields": fields}))
+        directory = storage.ensure_private_dir(path.parent)  # use the path it secured, not the raw one
+        storage.write_private_text(directory / path.name, json.dumps({"fetched_at": time.time(), "fields": fields}))
     except OSError as e:
         _warn(warnings, f"Could not cache ticket field definitions ({e}); they will be refetched next time")
 
