@@ -73,6 +73,7 @@ Zendesk API responses can be very large (comments with HTML, many custom fields)
 | `search` | Search tickets with query | `uv run zd-cli search "status:open"` |
 | `ticket` | Get ticket by ID | `uv run zd-cli ticket 12345` |
 | `ticket-details` | Get ticket + all comments | `uv run zd-cli ticket-details 12345` |
+| `export-ticket` | Export whole ticket (named custom fields + full conversation) as Markdown/HTML; `--public-only` omits internal notes, `--text-only` drops formatting, `--stdout` returns the wrapped document without writing a file (unless `--output`). Exports contain untrusted customer text; lookup problems are listed in an "Export notes" block in the document | `uv run zd-cli export-ticket 12345 --format html -o ticket.html` |
 | `linked-incidents` | Get incidents linked to problem | `uv run zd-cli linked-incidents 12345` |
 | `attachment` | Download attachment file | `uv run zd-cli attachment --ticket 12345 <url>` |
 

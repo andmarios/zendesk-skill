@@ -20,7 +20,7 @@ def test_cli_has_commands():
 
     # Get registered commands
     commands = list(app.registered_commands)
-    assert len(commands) == 28
+    assert len(commands) == 29
 
 
 def test_cli_command_names():
@@ -34,6 +34,7 @@ def test_cli_command_names():
         "ticket",
         "ticket-details",
         "linked-incidents",
+        "export-ticket",
         "attachment",
         "update-ticket",
         "create-ticket",
