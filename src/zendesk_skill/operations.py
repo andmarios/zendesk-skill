@@ -21,6 +21,7 @@ from zendesk_skill.client import (
     save_credentials,
     save_slack_config,
 )
+from zendesk_skill.enrich import enrich_tickets, with_warnings
 from zendesk_skill.formatting import format_for_zendesk
 from zendesk_skill.queries import get_queries_for_tool
 from zendesk_skill.storage import save_response
@@ -93,6 +94,17 @@ def _validate_id(value: str, name: str = "ID") -> None:
 # =============================================================================
 
 
+def _name_summary(ticket: dict, ticket_id_str: str) -> dict:
+    """Wrapped requester/assignee names for a ticket summary (names are untrusted input)."""
+    out = {}
+    for field in ("requester_name", "assignee_name"):
+        if ticket.get(field):
+            out[field] = wrap_field_simple(
+                ticket[field], "ticket", ticket_id_str, *get_session_markers()
+            )
+    return out
+
+
 async def search_tickets(
     query: str,
     page: int = 1,
@@ -121,22 +133,24 @@ async def search_tickets(
         "page": page,
         "per_page": min(per_page, 100),
         "sort_order": sort_order,
+        "include": "tickets(users)",
     }
     if sort_by:
         params["sort_by"] = sort_by
 
     result = await client.get("search.json", params=params)
+    warnings = await enrich_tickets(client, result.get("results", []), sideloads=(result,))
     suggested = get_queries_for_tool("search")
     file_path, stored = save_response(
-        "search", {"query": query}, result, suggested, output_path
+        "search", {"query": query}, result, suggested, output_path, warnings=warnings,
     )
 
-    return {
+    return with_warnings({
         "count": result.get("count", 0),
         "results": len(result.get("results", [])),
         "file_path": str(file_path),
         "next_page": result.get("next_page"),
-    }
+    }, warnings)
 
 
 async def get_ticket(
@@ -155,22 +169,24 @@ async def get_ticket(
     _validate_id(ticket_id, "ticket_id")
     client = _get_client()
 
-    result = await client.get(f"tickets/{ticket_id}.json")
+    result = await client.get(f"tickets/{ticket_id}.json", params={"include": "users"})
+    warnings = await enrich_tickets(client, [result.get("ticket", {})], sideloads=(result,))
     suggested = get_queries_for_tool("ticket")
     file_path, _ = save_response(
         "ticket", {"ticket_id": ticket_id}, result, suggested, output_path,
-        ticket_id=ticket_id,
+        ticket_id=ticket_id, warnings=warnings,
     )
 
     ticket = result.get("ticket", {})
     ticket_id_str = str(ticket.get("id", ticket_id))
-    return {
+    return with_warnings({
         "id": ticket.get("id"),
         "subject": wrap_field_simple(ticket.get("subject"), "ticket", ticket_id_str, *get_session_markers()),
         "status": ticket.get("status"),
         "priority": ticket.get("priority"),
+        **_name_summary(ticket, ticket_id_str),
         "file_path": str(file_path),
-    }
+    }, warnings)
 
 
 async def get_ticket_details(
@@ -192,34 +208,41 @@ async def get_ticket_details(
     # Get ticket with sideloaded data
     result = await client.get(
         f"tickets/{ticket_id}.json",
-        params={"include": "comment_count"}
+        params={"include": "comment_count,users"}
     )
 
     # Get comments
-    comments_result = await client.get(f"tickets/{ticket_id}/comments.json")
+    comments_result = await client.get(
+        f"tickets/{ticket_id}/comments.json", params={"include": "users"}
+    )
 
     # Combine
     combined = {
         "ticket": result.get("ticket", {}),
         "comments": comments_result.get("comments", []),
     }
+    warnings = await enrich_tickets(
+        client, [combined["ticket"]], combined["comments"],
+        sideloads=(result, comments_result),
+    )
 
     suggested = get_queries_for_tool("ticket_details")
     file_path, _ = save_response(
         "ticket_details", {"ticket_id": ticket_id}, combined, suggested, output_path,
-        ticket_id=ticket_id,
+        ticket_id=ticket_id, warnings=warnings,
     )
 
     ticket = combined["ticket"]
     ticket_id_str = str(ticket.get("id", ticket_id))
-    return {
+    return with_warnings({
         "id": ticket.get("id"),
         "subject": wrap_field_simple(ticket.get("subject"), "ticket", ticket_id_str, *get_session_markers()),
         "status": ticket.get("status"),
+        **_name_summary(ticket, ticket_id_str),
         "comment_count": len(combined["comments"]),
         "file_path": str(file_path),
         "suggested_queries": ["comments_slim", "attachments", "ticket_summary"],
-    }
+    }, warnings)
 
 
 async def get_linked_incidents(
@@ -237,18 +260,19 @@ async def get_linked_incidents(
     """
     client = _get_client()
 
-    result = await client.get(f"tickets/{ticket_id}/incidents.json")
+    result = await client.get(f"tickets/{ticket_id}/incidents.json", params={"include": "users"})
+    warnings = await enrich_tickets(client, result.get("tickets", []), sideloads=(result,))
     suggested = get_queries_for_tool("linked_incidents")
     file_path, _ = save_response(
         "linked_incidents", {"ticket_id": ticket_id}, result, suggested, output_path,
-        ticket_id=ticket_id,
+        ticket_id=ticket_id, warnings=warnings,
     )
 
-    return {
+    return with_warnings({
         "ticket_id": ticket_id,
         "incident_count": len(result.get("tickets", [])),
         "file_path": str(file_path),
-    }
+    }, warnings)
 
 
 def _safe_filename(raw: str, default: str = "attachment") -> str:
@@ -827,18 +851,20 @@ async def get_view_tickets(
 
     result = await client.get(
         f"views/{view_id}/tickets.json",
-        params={"page": page, "per_page": per_page}
+        params={"page": page, "per_page": per_page, "include": "users"}
     )
+    warnings = await enrich_tickets(client, result.get("tickets", []), sideloads=(result,))
     suggested = get_queries_for_tool("view_tickets")
     file_path, _ = save_response(
-        "view_tickets", {"view_id": view_id}, result, suggested, output_path
+        "view_tickets", {"view_id": view_id}, result, suggested, output_path,
+        warnings=warnings,
     )
 
-    return {
+    return with_warnings({
         "view_id": view_id,
         "count": len(result.get("tickets", [])),
         "file_path": str(file_path),
-    }
+    }, warnings)
 
 
 # =============================================================================

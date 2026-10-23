@@ -48,6 +48,15 @@ All API responses are automatically saved to `<temp>/zd-cli-<UID>/` (system temp
 3. Use `uv run zd-cli query <file> -q <query_name>` to extract specific data
 4. Avoid re-fetching - work with stored files
 
+### Names and Field Labels Are Resolved for You
+
+Saved ticket data (`ticket`, `ticket-details`, `search`, `linked-incidents`, `view-tickets`) carries names next to the raw IDs, so there is no need to look users up one by one:
+- Tickets: `requester_name`/`requester_email`, `assignee_name`/`assignee_email`, and CC'd users and followers as `email_cc_users`/`follower_users` (each a list of `{id, name, email}`)
+- Comments: `author_name`
+- Custom fields: `title`, `type`, and `value_label` (the option name) for dropdown and multi-select values
+
+Lookups are best effort. If one fails (for example, the token can't read users or ticket fields), the command still succeeds and both the output and the saved file's `metadata.warnings` list what is shown as bare IDs. Check it before concluding a ticket has no CCs or an unnamed field. Field definitions are cached for an hour; after renaming a field in Zendesk, set `ZD_REFRESH_FIELDS=1` for one command to pick up the new names.
+
 ### Why This Matters
 
 Zendesk API responses can be very large (comments with HTML, many custom fields). By saving locally and using jq:
@@ -208,15 +217,25 @@ requester:*@bigclient.com status:open
 
 After fetching data, use `zd-cli query` with these named queries:
 
+### For a Ticket (`ticket`)
+| Query | Description |
+|-------|-------------|
+| `summary` | Key ticket fields |
+| `requester` | Requester, assignee, CC'd users and followers, with names and emails |
+| `ccs` | CC'd users and followers only (id, name, email) |
+| `tags` | Ticket tags |
+| `custom_fields` | Custom fields that have a value (including unticked checkboxes), with `title` and `value_label` |
+
 ### For Ticket Details (`ticket-details`)
 | Query | Description |
 |-------|-------------|
 | `ticket_summary` | Get ticket without comments |
-| `comments_slim` | Comments with truncated body (no HTML) |
-| `comments_full` | Full comment bodies (no HTML) |
+| `comments_slim` | Comments with author name and truncated body (no HTML) |
+| `comments_full` | Full comment bodies with author name (no HTML) |
 | `attachments` | List all attachments from comments |
 | `comment_count` | Count by public/private |
 | `latest_comment` | Most recent comment |
+| `messages_by_author` | Comment counts per author, with names |
 
 > **Read the customer's full message from `comments_full`, not `ticket_summary`.** The ticket `description` (used by `ticket_summary`) drops list items nested inside a numbered list, and Zendesk offers no plain-text alternative for it. The first comment's `plain_body`, returned by `comments_full`, carries the complete text.
 
@@ -224,9 +243,11 @@ After fetching data, use `zd-cli query` with these named queries:
 | Query | Description |
 |-------|-------------|
 | `ids_only` | Just ticket IDs |
-| `summary_list` | ID, subject, status, priority |
+| `summary_list` | ID, subject, status, priority, requester and assignee names |
 | `by_status` | Group tickets by status |
 | `by_priority` | Group by priority |
+| `by_requester` | Group by requester, with names |
+| `top_requesters` | Top 10 requesters by ticket count, with names |
 | `pagination` | Pagination info |
 
 ### Custom jq Examples
@@ -235,10 +256,10 @@ After fetching data, use `zd-cli query` with these named queries:
 uv run zd-cli query file.json --jq '.data.ticket | {id, subject, status, tags}'
 
 # Filter comments by author
-uv run zd-cli query file.json --jq '[.data.comments[] | select(.author_id == 12345)]'
+uv run zd-cli query file.json --jq '[.data.comments[] | select(.author_name == "Jane Doe")]'
 
-# Get timestamps only
-uv run zd-cli query file.json --jq '.data.comments | map({created_at, author_id})'
+# Get timestamps and authors only
+uv run zd-cli query file.json --jq '.data.comments | map({created_at, author_id, author_name})'
 ```
 
 ### List Available Queries
