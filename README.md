@@ -125,7 +125,7 @@ Point Claude Code at `SKILL.md` to give Claude full command documentation and wo
 
 ### Write Operations
 
-All write commands convert Markdown to HTML by default (use `--plain-text` to skip).
+All write commands convert Markdown to HTML by default (use `--plain-text` to skip). Bare URLs are linked and lists get a blank line after them. Raw HTML inside Markdown is escaped; content that starts with an HTML tag is sent unchanged.
 
 | Command | Description |
 |---------|-------------|

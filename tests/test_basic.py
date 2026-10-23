@@ -533,6 +533,40 @@ def test_markdown_to_html_links():
     assert "link text" in result
 
 
+def test_markdown_to_html_bare_url_autolinked():
+    """Bare URLs become links; Zendesk does not autolink a pre-rendered html_body."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    result = markdown_to_html("See https://docs.example.com/notes.")
+    assert '<a href="https://docs.example.com/notes">https://docs.example.com/notes</a>.' in result
+
+
+def test_markdown_to_html_url_in_code_not_linked():
+    """URLs in code spans stay code, and Markdown links are not double-linked."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    result = markdown_to_html("`https://code.example.com` and [docs](https://docs.example.com)")
+    assert "<code>https://code.example.com</code>" in result
+    assert result.count("<a ") == 1
+
+
+def test_markdown_to_html_space_after_list():
+    """An empty paragraph separates a list from the block that follows it."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    result = markdown_to_html("- item 1\n- item 2\n\nNext paragraph\n\n- item 3\n\n## Heading")
+    assert "</ul>\n<p>&nbsp;</p>\n<p>Next paragraph</p>" in result
+    assert "</ul>\n<p>&nbsp;</p>\n<h3 " in result
+
+
+def test_markdown_to_html_no_space_inside_or_after_last_list():
+    """Nested lists and a list that ends the content get no spacer."""
+    from zendesk_skill.formatting import markdown_to_html
+
+    result = markdown_to_html("1. one\n   - nested\n2. two")
+    assert "&nbsp;" not in result
+
+
 def test_markdown_to_html_passthrough():
     """Test that content starting with an HTML tag is passed through unchanged."""
     from zendesk_skill.formatting import markdown_to_html

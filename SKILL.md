@@ -71,6 +71,12 @@ Zendesk API responses can be very large (comments with HTML, many custom fields)
 
 All write commands (`create-ticket`, `add-note`, `add-comment`) support **Markdown formatting** by default. Content is converted to HTML for reliable rendering in Zendesk Agent Workspace. Use `--plain-text` to send as plain text instead.
 
+How the conversion renders in Zendesk:
+- **Links**: bare URLs are linked automatically; `[text](url)` gives a link with readable text.
+- **Lists**: an empty paragraph is added after each list, because Zendesk shows no gap between a list and the next paragraph or heading.
+- **Raw HTML inside Markdown is escaped** and shows up literally (`&nbsp;`, `<br>`). To send hand-written HTML, start the content with an HTML tag such as `<p>`; it is then sent unchanged.
+- **Public comments cannot be edited** once posted. For a customer-facing reply, post it to a test ticket first and check how it renders.
+
 | Command | Description | Example |
 |---------|-------------|---------|
 | `update-ticket` | Update ticket properties | `uv run zd-cli update-ticket 12345 --status pending` |

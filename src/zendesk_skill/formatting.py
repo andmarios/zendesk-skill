@@ -13,8 +13,10 @@ import mistune
 MAX_CONTENT_SIZE = 65536  # 64KB
 
 # Markdown renderer with hard_wrap enabled - converts single newlines to <br>
-# This matches user expectations in a support context (WYSIWYG behavior)
-_md = mistune.create_markdown(hard_wrap=True, plugins=["table"])
+# This matches user expectations in a support context (WYSIWYG behavior).
+# The "url" plugin links bare URLs: html_body is sent pre-rendered, so Zendesk
+# does not autolink them and they would otherwise arrive as plain text.
+_md = mistune.create_markdown(hard_wrap=True, plugins=["table", "url"])
 
 # Pattern to detect content that's already HTML: must start with an HTML tag
 # (after optional whitespace). This avoids false positives from Markdown that
@@ -44,6 +46,18 @@ def _downgrade_headings(html_content: str) -> str:
     return re.sub(r"<(/?)h([1-6])>", _replace, html_content)
 
 
+# Zendesk renders no gap below a list, so the block after it looks glued on.
+# Only top-level lists are followed by a block tag; nested ones close into </li>.
+_LIST_END_BEFORE_BLOCK = re.compile(
+    r"(</[uo]l>)\n(?=<(?:p|h[1-6]|ul|ol|table|pre|blockquote)\b)"
+)
+
+
+def _space_after_lists(html_content: str) -> str:
+    """Insert an empty paragraph between a top-level list and the next block."""
+    return _LIST_END_BEFORE_BLOCK.sub("\\1\n<p>&nbsp;</p>\n", html_content)
+
+
 def markdown_to_html(content: str) -> str:
     """Convert Markdown content to HTML.
 
@@ -63,7 +77,7 @@ def markdown_to_html(content: str) -> str:
     if _HTML_START_PATTERN.match(content):
         return content
 
-    return _downgrade_headings(_md(content))
+    return _space_after_lists(_downgrade_headings(_md(content)))
 
 
 def plain_text_to_html(content: str) -> str:
