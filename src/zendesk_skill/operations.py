@@ -142,7 +142,7 @@ async def search_tickets(
     warnings = await enrich_tickets(client, result.get("results", []), sideloads=(result,))
     suggested = get_queries_for_tool("search")
     file_path, stored = save_response(
-        "search", {"query": query}, result, suggested, output_path
+        "search", {"query": query}, result, suggested, output_path, warnings=warnings,
     )
 
     return with_warnings({
@@ -174,7 +174,7 @@ async def get_ticket(
     suggested = get_queries_for_tool("ticket")
     file_path, _ = save_response(
         "ticket", {"ticket_id": ticket_id}, result, suggested, output_path,
-        ticket_id=ticket_id,
+        ticket_id=ticket_id, warnings=warnings,
     )
 
     ticket = result.get("ticket", {})
@@ -229,7 +229,7 @@ async def get_ticket_details(
     suggested = get_queries_for_tool("ticket_details")
     file_path, _ = save_response(
         "ticket_details", {"ticket_id": ticket_id}, combined, suggested, output_path,
-        ticket_id=ticket_id,
+        ticket_id=ticket_id, warnings=warnings,
     )
 
     ticket = combined["ticket"]
@@ -265,7 +265,7 @@ async def get_linked_incidents(
     suggested = get_queries_for_tool("linked_incidents")
     file_path, _ = save_response(
         "linked_incidents", {"ticket_id": ticket_id}, result, suggested, output_path,
-        ticket_id=ticket_id,
+        ticket_id=ticket_id, warnings=warnings,
     )
 
     return with_warnings({
@@ -856,7 +856,8 @@ async def get_view_tickets(
     warnings = await enrich_tickets(client, result.get("tickets", []), sideloads=(result,))
     suggested = get_queries_for_tool("view_tickets")
     file_path, _ = save_response(
-        "view_tickets", {"view_id": view_id}, result, suggested, output_path
+        "view_tickets", {"view_id": view_id}, result, suggested, output_path,
+        warnings=warnings,
     )
 
     return with_warnings({

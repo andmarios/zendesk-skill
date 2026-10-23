@@ -223,14 +223,17 @@ def _count_items(data: Any) -> int:
 def _people_paths(prefix: str) -> list[str]:
     """Scan paths for resolved people fields under a ticket-shaped prefix.
 
-    Display names come from attacker-controllable sources (e.g. an email From
-    header), so they are scanned like any other free text.
+    Display names and emails come from attacker-controllable sources (e.g. an
+    email From header), so they are scanned like any other free text.
     """
     return [
-        f"{prefix}.requester_name",
-        f"{prefix}.assignee_name",
-        f"{prefix}.email_cc_users[].name",
-        f"{prefix}.follower_users[].name",
+        f"{prefix}.{role}_{attr}"
+        for role in ("requester", "assignee")
+        for attr in ("name", "email")
+    ] + [
+        f"{prefix}.{people}[].{attr}"
+        for people in ("email_cc_users", "follower_users")
+        for attr in ("name", "email")
     ]
 
 
@@ -340,6 +343,7 @@ def save_response(
     suggested_queries: list[dict[str, str]] | None = None,
     output_path: str | None = None,
     ticket_id: str | None = None,
+    warnings: list[str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Save an API response to a local file with metadata.
 
@@ -350,6 +354,9 @@ def save_response(
         suggested_queries: List of suggested jq queries for this response
         output_path: Optional custom output path (overrides default and ticket_id)
         ticket_id: Optional ticket ID to organize files by ticket
+        warnings: Optional lookup warnings (e.g. names that could not be
+            resolved), recorded in metadata so later queries on the file can
+            tell "no CCs" from "CC lookup failed"
 
     Returns:
         Tuple of (file_path, stored_data)
@@ -379,6 +386,9 @@ def save_response(
         "suggestedQueries": suggested_queries or [],
         "data": data,
     }
+
+    if warnings:
+        stored_data["metadata"]["warnings"] = list(warnings)
 
     # Scan for suspicious content
     detections = _scan_fields(tool_name, data)

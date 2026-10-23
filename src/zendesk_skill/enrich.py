@@ -59,7 +59,8 @@ def users_from_sideload(*results: Any) -> dict[int, dict]:
     for result in results:
         if not isinstance(result, dict):
             continue
-        for u in result.get("users") or []:
+        sideloaded = result.get("users")
+        for u in sideloaded if isinstance(sideloaded, list) else []:
             if isinstance(u, dict) and isinstance(u.get("id"), int) and (u.get("name") or u.get("email")):
                 users[u["id"]] = {"name": u.get("name"), "email": u.get("email")}
     return users
@@ -265,7 +266,8 @@ async def _load_fields(
     """Field definitions for these tickets and whether they were just fetched.
 
     Every cache decision lives here:
-    - a cache younger than FIELDS_CACHE_TTL is used as is, unless
+    - a cache younger than FIELDS_CACHE_TTL is used as is (a future-dated one,
+      written while the clock was ahead, counts as stale), unless
       ZD_REFRESH_FIELDS=1 is set, or a ticket uses a field or dropdown option it
       doesn't know (created since it was cached) and it is at least
       MISS_REFETCH_MIN_AGE old - so a field that can never be resolved
@@ -282,7 +284,7 @@ async def _load_fields(
     if cached is not None and not _refresh_requested():
         fields, fetched_at = cached
         age = time.time() - fetched_at
-        if age < FIELDS_CACHE_TTL and not (
+        if 0 <= age < FIELDS_CACHE_TTL and not (
             age >= MISS_REFETCH_MIN_AGE
             and any(_is_miss(cf, fields) for t in tickets for cf in t.get("custom_fields") or [])
         ):

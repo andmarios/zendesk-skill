@@ -55,7 +55,7 @@ Saved ticket data (`ticket`, `ticket-details`, `search`, `linked-incidents`, `vi
 - Comments: `author_name`
 - Custom fields: `title`, `type`, and `value_label` (the option name) for dropdown and multi-select values
 
-Lookups are best effort. If one fails (for example, the token can't read users or ticket fields), the command still succeeds and the output gains a `warnings` list saying what is shown as bare IDs. Field definitions are cached for an hour; after renaming a field in Zendesk, set `ZD_REFRESH_FIELDS=1` for one command to pick up the new names.
+Lookups are best effort. If one fails (for example, the token can't read users or ticket fields), the command still succeeds and both the output and the saved file's `metadata.warnings` list what is shown as bare IDs. Check it before concluding a ticket has no CCs or an unnamed field. Field definitions are cached for an hour; after renaming a field in Zendesk, set `ZD_REFRESH_FIELDS=1` for one command to pick up the new names.
 
 ### Why This Matters
 
@@ -218,7 +218,7 @@ After fetching data, use `zd-cli query` with these named queries:
 | `requester` | Requester, assignee, CC'd users and followers, with names and emails |
 | `ccs` | CC'd users and followers only (id, name, email) |
 | `tags` | Ticket tags |
-| `custom_fields` | Populated custom fields with `title` and `value_label` |
+| `custom_fields` | Custom fields that have a value (including unticked checkboxes), with `title` and `value_label` |
 
 ### For Ticket Details (`ticket-details`)
 | Query | Description |
