@@ -21,12 +21,7 @@ from zendesk_skill.client import (
     save_credentials,
     save_slack_config,
 )
-from zendesk_skill.enrich import (
-    annotate_custom_fields,
-    annotate_people,
-    users_from_sideload,
-    with_warnings,
-)
+from zendesk_skill.enrich import enrich_tickets, with_warnings
 from zendesk_skill.formatting import format_for_zendesk
 from zendesk_skill.queries import get_queries_for_tool
 from zendesk_skill.storage import save_response
@@ -138,14 +133,13 @@ async def search_tickets(
         "page": page,
         "per_page": min(per_page, 100),
         "sort_order": sort_order,
+        "include": "tickets(users)",
     }
     if sort_by:
         params["sort_by"] = sort_by
 
     result = await client.get("search.json", params=params)
-    warnings: list[str] = []
-    await annotate_people(client, tickets=result.get("results", []), warnings=warnings)
-    await annotate_custom_fields(client, result.get("results", []), warnings)
+    warnings = await enrich_tickets(client, result.get("results", []), sideloads=(result,))
     suggested = get_queries_for_tool("search")
     file_path, stored = save_response(
         "search", {"query": query}, result, suggested, output_path
@@ -176,12 +170,7 @@ async def get_ticket(
     client = _get_client()
 
     result = await client.get(f"tickets/{ticket_id}.json", params={"include": "users"})
-    warnings: list[str] = []
-    await annotate_people(
-        client, tickets=[result.get("ticket", {})],
-        known_users=users_from_sideload(result), warnings=warnings,
-    )
-    await annotate_custom_fields(client, [result.get("ticket", {})], warnings)
+    warnings = await enrich_tickets(client, [result.get("ticket", {})], sideloads=(result,))
     suggested = get_queries_for_tool("ticket")
     file_path, _ = save_response(
         "ticket", {"ticket_id": ticket_id}, result, suggested, output_path,
@@ -232,12 +221,10 @@ async def get_ticket_details(
         "ticket": result.get("ticket", {}),
         "comments": comments_result.get("comments", []),
     }
-    warnings: list[str] = []
-    await annotate_people(
-        client, tickets=[combined["ticket"]], comments=combined["comments"],
-        known_users=users_from_sideload(result, comments_result), warnings=warnings,
+    warnings = await enrich_tickets(
+        client, [combined["ticket"]], combined["comments"],
+        sideloads=(result, comments_result),
     )
-    await annotate_custom_fields(client, [combined["ticket"]], warnings)
 
     suggested = get_queries_for_tool("ticket_details")
     file_path, _ = save_response(
@@ -273,10 +260,8 @@ async def get_linked_incidents(
     """
     client = _get_client()
 
-    result = await client.get(f"tickets/{ticket_id}/incidents.json")
-    warnings: list[str] = []
-    await annotate_people(client, tickets=result.get("tickets", []), warnings=warnings)
-    await annotate_custom_fields(client, result.get("tickets", []), warnings)
+    result = await client.get(f"tickets/{ticket_id}/incidents.json", params={"include": "users"})
+    warnings = await enrich_tickets(client, result.get("tickets", []), sideloads=(result,))
     suggested = get_queries_for_tool("linked_incidents")
     file_path, _ = save_response(
         "linked_incidents", {"ticket_id": ticket_id}, result, suggested, output_path,
@@ -866,11 +851,9 @@ async def get_view_tickets(
 
     result = await client.get(
         f"views/{view_id}/tickets.json",
-        params={"page": page, "per_page": per_page}
+        params={"page": page, "per_page": per_page, "include": "users"}
     )
-    warnings: list[str] = []
-    await annotate_people(client, tickets=result.get("tickets", []), warnings=warnings)
-    await annotate_custom_fields(client, result.get("tickets", []), warnings)
+    warnings = await enrich_tickets(client, result.get("tickets", []), sideloads=(result,))
     suggested = get_queries_for_tool("view_tickets")
     file_path, _ = save_response(
         "view_tickets", {"view_id": view_id}, result, suggested, output_path
