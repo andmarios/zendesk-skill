@@ -559,6 +559,57 @@ def ticket_details_cmd(
     output_json(result)
 
 
+@app.command("export-ticket")
+@zendesk_command
+def export_ticket_cmd(
+    ticket_id: Annotated[str, typer.Argument(help="Ticket ID")],
+    fmt: Annotated[str, typer.Option("--format", "-f", help="Output format: md or html")] = "md",
+    output_path: Annotated[str | None, typer.Option("--output", "-o", help="Output file path")] = None,
+    stdout: Annotated[bool, typer.Option("--stdout", help="Return the document (scanned and wrapped like `query`); writes no file unless --output is also given")] = False,
+    public_only: Annotated[bool, typer.Option("--public-only", help="Leave out internal notes")] = False,
+    text_only: Annotated[bool, typer.Option("--text-only", help="Plain-text comment bodies (drop lists, bold, links, code, tables)")] = False,
+) -> None:
+    """Export a whole ticket (details, named custom fields, full conversation) as Markdown or HTML.
+
+    Comment formatting is kept (rebuilt safely from html_body); internal notes are included
+    and flagged unless --public-only is given.
+
+    The document contains customer-controlled text. Raw HTML is neutralised and terminal
+    control characters are replaced, but Markdown written by customers (emphasis, links) is
+    left as written: open exports of untrusted tickets in a viewer that sanitises links, or
+    use --format html, which escapes everything.
+    """
+    write_file = (not stdout) or output_path is not None
+    result = run_async(
+        operations.export_ticket(
+            ticket_id, fmt, output_path, include_content=stdout, public_only=public_only,
+            text_only=text_only, write_file=write_file,
+        )
+    )
+    if not stdout:
+        output_json(result)
+        return
+
+    # The export is customer-controlled text headed for an LLM: run it through the
+    # same scan + session-marker wrapping as `query` instead of printing it raw.
+    content = result["content"]
+    warnings = result.get("warnings", [])
+    extras = {k: result[k] for k in ("file_path", "internal_notes_omitted") if k in result}
+    if is_security_enabled():
+        start, end = get_session_markers()
+        wrapped = wrap_external_data(content, "zendesk_export", f"export_ticket:{ticket_id}", start, end)
+        payload = {"result": wrapped if wrapped is not None else content, **extras}
+        if warnings:
+            payload["warnings"] = warnings
+        output_json(payload)
+    else:
+        print(content, end="")  # stdout stays exactly the document; notes go to stderr
+        for note in warnings:
+            print(f"warning: {note}", file=sys.stderr)
+        if "file_path" in extras:
+            print(f"note: also written to {extras['file_path']}", file=sys.stderr)
+
+
 @app.command("linked-incidents")
 @zendesk_command
 def linked_incidents_cmd(

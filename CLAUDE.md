@@ -18,6 +18,8 @@ zendesk-skill/
 │       ├── cli.py           # Typer CLI with commands
 │       ├── client.py        # Zendesk API client (httpx-based) + secrets management
 │       ├── crypto.py        # Fernet encryption at rest (machine-derived key, HKDF)
+│       ├── enrich.py        # People / custom field name resolution
+│       ├── export.py        # Render a whole ticket as Markdown/HTML
 │       ├── formatting.py    # Markdown-to-HTML for write operations
 │       ├── operations.py    # Shared business logic (CLI + MCP server)
 │       ├── reporting.py     # Slack & Markdown report generation
@@ -75,7 +77,7 @@ zendesk-skill/
 
 ## Command Categories
 
-1. **Ticket Commands** (5): search, ticket, ticket-details, linked-incidents, attachment
+1. **Ticket Commands** (6): search, ticket, ticket-details, export-ticket, linked-incidents, attachment
 2. **Write Operations** (4): update-ticket, create-ticket, add-note, add-comment
 3. **Metrics & Analytics** (4): ticket-metrics, list-metrics, satisfaction-ratings, satisfaction-rating
 4. **Views** (3): views, view-count, view-tickets
