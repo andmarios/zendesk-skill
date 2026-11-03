@@ -12,7 +12,8 @@ A Claude Code skill for Zendesk Support integration. The primary interface is a 
 - **Slack integration** — send formatted support reports to Slack channels
 - **Support metrics analysis** — response times, resolution rates, CSAT, after-hours and on-call tracking
 - **Local response storage** — API responses saved to temp directory, queryable with jq without re-fetching
-- **People and custom field names** — saved ticket responses include `requester_name`/`requester_email`, `assignee_name`, CC'd users and followers (`email_cc_users`, `follower_users`, each with name + email) and comment `author_name`, plus custom field `title` (and `value_label` for dropdown options). Users come from the `users` sideload of the same request (`users/show_many` only fills any gaps), and only the resolved names and emails are saved, never the full user records; field definitions are cached on disk for an hour, refetched (at most once a minute) when a ticket uses a field or dropdown option the cache doesn't know, and force-refreshed with `ZD_REFRESH_FIELDS=1` (e.g. after renaming a field); if a refetch fails the cached definitions are used, even expired ones. Lookup failures never fail a command, they are reported in a `warnings` list in the result and in the saved file's `metadata.warnings`
+- **People and custom field names** — ticket responses show names and emails, not just IDs, and custom fields carry their titles (see [People and custom field names](#people-and-custom-field-names))
+- **Whole-ticket export** — `export-ticket` renders a ticket and its full conversation as Markdown or HTML
 - **Markdown formatting** — write operations convert Markdown to HTML for proper rendering in Agent Workspace
 - **Encrypted credentials** — API tokens and OAuth tokens encrypted at rest
 
@@ -143,6 +144,7 @@ All write commands convert Markdown to HTML by default (use `--plain-text` to sk
 | `ticket-metrics 12345` | Reply/resolution times for a ticket |
 | `list-metrics` | Metrics across tickets |
 | `satisfaction-ratings --score bad` | CSAT ratings |
+| `satisfaction-rating 12345` | Single CSAT rating by ID |
 
 ### Views
 
@@ -179,7 +181,15 @@ zd-cli query <file> --jq '.data.ticket'    # custom jq
 zd-cli query <file> --list                 # show available named queries
 ```
 
-All commands save their full API response to `/tmp/zd-cli-$UID/` and print the path. Use `zd-cli query` to extract data from saved files without re-fetching.
+Commands that fetch data from Zendesk save the full API response to `/tmp/zd-cli-$UID/` and print the path (`export-ticket` writes the rendered document there instead). Use `zd-cli query` to extract data from saved files without re-fetching.
+
+### People and custom field names
+
+Saved ticket responses include `requester_name`/`requester_email`, `assignee_name`, CC'd users and followers (`email_cc_users`, `follower_users`, each with name + email) and comment `author_name`, plus custom field `title` (and `value_label` for dropdown options).
+
+- Users come from the `users` sideload of the same request; `users/show_many` only fills any gaps. Only the resolved names and emails are saved, never the full user records.
+- Field definitions are cached on disk for an hour. They are refetched (at most once a minute) when a ticket uses a field or dropdown option the cache doesn't know, and force-refreshed with `ZD_REFRESH_FIELDS=1` (e.g. after renaming a field). If a refetch fails, the cached definitions are used, even expired ones.
+- Lookup failures never fail a command. They are reported in a `warnings` list in the result and in the saved file's `metadata.warnings`.
 
 ## Search Query Syntax
 
@@ -300,7 +310,7 @@ Saved responses, exports and downloaded attachments contain customer data, so th
 
 ### Exported documents
 
-`export-ticket` output contains customer-controlled text. Raw HTML is neutralised (`<` is escaped in Markdown, everything is escaped in HTML), formatting is rebuilt from an allowlist rather than passed through, and terminal control characters and characters UTF-8 cannot encode are replaced with U+FFFD and counted in the result's `warnings`. Lookup problems (users, custom field definitions) are listed in an "Export notes" block inside the document as well, so a reader can tell "no CCs" from "CC lookup failed". Markdown that customers write themselves (emphasis, links) is deliberately left as written, so when you open an export of an untrusted ticket in a Markdown viewer, use one that sanitises links - or export with `--format html`, which escapes all comment text. `--stdout` output is scanned and wrapped like `query` output; raw output is only printed when security is disabled, with warnings on stderr.
+`export-ticket` output contains customer-controlled text. Raw HTML is neutralised (`<` is escaped in Markdown, everything is escaped in HTML), formatting is rebuilt from an allowlist rather than passed through, and terminal control characters and characters UTF-8 cannot encode are replaced with U+FFFD and counted in the result's `warnings`. Lookup problems (users, custom field definitions) are listed in an "Export notes" block inside the document as well, so a reader can tell "no CCs" from "CC lookup failed". In formatted comment bodies, customer-typed Markdown characters are escaped too, and links come only from real `<a>` tags with `http(s)` or `mailto` targets. Plain-text bodies (`--text-only`, or comments without `html_body`) keep Markdown that customers write themselves (emphasis, links) as written, so when you open such an export of an untrusted ticket in a Markdown viewer, use one that sanitises links - or export with `--format html`, which escapes all comment text. `--stdout` output is scanned and wrapped like `query` output; raw output is only printed when security is disabled, with warnings on stderr.
 
 ## MCP Server
 
@@ -317,7 +327,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "zendesk": {
       "command": "uvx",
-      "args": ["--from", "zendesk-skill", "zendesk-mcp"]
+      "args": ["--from", "zd-cli", "zendesk-mcp"]
     }
   }
 }
