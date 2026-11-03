@@ -237,6 +237,26 @@ async def zendesk_get_ticket_details(params: TicketIdInput) -> str:
         return _handle_error(e)
 
 
+class ExportTicketInput(TicketIdInput):
+    """Input for ticket export."""
+    format: str = Field(default="md", description="Output format: 'md' or 'html'")
+    public_only: bool = Field(default=False, description="Leave out internal notes")
+    text_only: bool = Field(default=False, description="Plain-text comment bodies instead of formatted")
+
+
+@mcp.tool(name="zendesk_export_ticket")
+async def zendesk_export_ticket(params: ExportTicketInput) -> str:
+    """Export a whole ticket (details, named custom fields, conversation) to a Markdown or HTML file."""
+    try:
+        result = await operations.export_ticket(
+            params.ticket_id, params.format, params.output_path,
+            public_only=params.public_only, text_only=params.text_only,
+        )
+        return _format_result(result)
+    except Exception as e:
+        return _handle_error(e)
+
+
 @mcp.tool(name="zendesk_get_linked_incidents")
 async def zendesk_get_linked_incidents(params: TicketIdInput) -> str:
     """Fetch all incident tickets linked to a particular ticket."""

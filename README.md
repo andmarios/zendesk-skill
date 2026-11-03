@@ -7,7 +7,7 @@ A Claude Code skill for Zendesk Support integration. The primary interface is a 
 ## Features
 
 - **Claude Code skill** — `SKILL.md` gives Claude full command documentation, workflows, and the save-first/query-later pattern
-- **CLI (`zd-cli`)** — 28 commands covering tickets, users, organizations, views, metrics, and more
+- **CLI (`zd-cli`)** — 29 commands covering tickets, users, organizations, views, metrics, and more
 - **MCP server** — alternative interface for other AI assistants
 - **Slack integration** — send formatted support reports to Slack channels
 - **Support metrics analysis** — response times, resolution rates, CSAT, after-hours and on-call tracking
@@ -121,6 +121,7 @@ Point Claude Code at `SKILL.md` to give Claude full command documentation and wo
 | `search "status:open priority:urgent"` | Search tickets |
 | `ticket 12345` | Get ticket by ID |
 | `ticket-details 12345` | Ticket + all comments |
+| `export-ticket 12345 --format html` | Whole ticket as a Markdown (`md`) or HTML document. Comment formatting (lists, bold, links, code, tables) is kept, rebuilt safely from `html_body`; `--text-only` gives plain text. Internal notes are included and flagged; `--public-only` omits them. `--stdout` returns the document scanned and wrapped like `query` and writes no file unless `--output` is also given |
 | `linked-incidents 12345` | Incidents linked to a problem ticket |
 | `attachment --ticket 12345 <url>` | Download an attachment |
 
@@ -296,6 +297,10 @@ Requires [`prompt-security-utils`](https://pypi.org/project/prompt-security-util
 ### Local file permissions
 
 Saved responses, exports and downloaded attachments contain customer data, so they are written owner-only: directories `0700`, files `0600`. The tool refuses to use `/tmp/zd-cli-$UID/` if it is a symlink or owned by another user, and it never changes permissions on anything outside that directory. If a directory cannot be secured the command fails with a `File system error` message; if only a file's mode cannot be tightened, a warning is printed on stderr.
+
+### Exported documents
+
+`export-ticket` output contains customer-controlled text. Raw HTML is neutralised (`<` is escaped in Markdown, everything is escaped in HTML), formatting is rebuilt from an allowlist rather than passed through, and terminal control characters and characters UTF-8 cannot encode are replaced with U+FFFD and counted in the result's `warnings`. Lookup problems (users, custom field definitions) are listed in an "Export notes" block inside the document as well, so a reader can tell "no CCs" from "CC lookup failed". Markdown that customers write themselves (emphasis, links) is deliberately left as written, so when you open an export of an untrusted ticket in a Markdown viewer, use one that sanitises links - or export with `--format html`, which escapes all comment text. `--stdout` output is scanned and wrapped like `query` output; raw output is only printed when security is disabled, with warnings on stderr.
 
 ## MCP Server
 
