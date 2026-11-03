@@ -6,7 +6,7 @@ when_to_use: When users ask about Zendesk tickets, support metrics, CSAT ratings
 
 # Zendesk CLI Skill
 
-A command-line interface for comprehensive Zendesk API integration. Run commands via `uv run zd-cli <command>` in the skill directory.
+A command-line interface for comprehensive Zendesk API integration. Run commands via `uvx zd-cli <command>`.
 
 > **Running commands**
 >
@@ -14,22 +14,22 @@ A command-line interface for comprehensive Zendesk API integration. Run commands
 > - **Development (cloned repo):** `uv run zd-cli <command>` from the repo directory
 > - **Missing `uvx` or `jq`:** suggest the user install them (macOS: `brew install uv jq`)
 >
-> Never use bare `python3 zd-cli` — dependencies won't be available. All examples below use `uv run zd-cli`; substitute `uvx zd-cli` if running outside the repo.
+> Never use bare `python3 zd-cli` — dependencies won't be available. All examples below use `uvx zd-cli`; substitute `uv run zd-cli` when working on the repo itself.
 
 ## Quick Start
 
 ```bash
 # Test authentication
-uv run zd-cli me
+uvx zd-cli me
 
 # Search tickets
-uv run zd-cli search "status:open priority:urgent"
+uvx zd-cli search "status:open priority:urgent"
 
 # Get ticket details
-uv run zd-cli ticket-details 12345
+uvx zd-cli ticket-details 12345
 
 # Query saved response (path shown in command output)
-uv run zd-cli query <temp>/zd-cli-<UID>/ticket_details_xxx.json -q comments_slim
+uvx zd-cli query <temp>/zd-cli-<UID>/ticket_details_xxx.json -q comments_slim
 ```
 
 ## Key Concepts
@@ -43,9 +43,9 @@ All API responses are automatically saved to `<temp>/zd-cli-<UID>/` (system temp
 - **Data**: Full API response
 
 **Workflow pattern:**
-1. Run a command (e.g., `uv run zd-cli ticket-details 12345`)
+1. Run a command (e.g., `uvx zd-cli ticket-details 12345`)
 2. Response saved to a JSON file (path shown in output)
-3. Use `uv run zd-cli query <file> -q <query_name>` to extract specific data
+3. Use `uvx zd-cli query <file> -q <query_name>` to extract specific data
 4. Avoid re-fetching - work with stored files
 
 ### Names and Field Labels Are Resolved for You
@@ -70,12 +70,12 @@ Zendesk API responses can be very large (comments with HTML, many custom fields)
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `search` | Search tickets with query | `uv run zd-cli search "status:open"` |
-| `ticket` | Get ticket by ID | `uv run zd-cli ticket 12345` |
-| `ticket-details` | Get ticket + all comments | `uv run zd-cli ticket-details 12345` |
-| `export-ticket` | Export whole ticket (named custom fields + full conversation) as Markdown/HTML; `--public-only` omits internal notes, `--text-only` drops formatting, `--stdout` returns the wrapped document without writing a file (unless `--output`). Exports contain untrusted customer text; lookup problems are listed in an "Export notes" block in the document | `uv run zd-cli export-ticket 12345 --format html -o ticket.html` |
-| `linked-incidents` | Get incidents linked to problem | `uv run zd-cli linked-incidents 12345` |
-| `attachment` | Download attachment file | `uv run zd-cli attachment --ticket 12345 <url>` |
+| `search` | Search tickets with query | `uvx zd-cli search "status:open"` |
+| `ticket` | Get ticket by ID | `uvx zd-cli ticket 12345` |
+| `ticket-details` | Get ticket + all comments | `uvx zd-cli ticket-details 12345` |
+| `export-ticket` | Ticket as a Markdown/HTML document. Includes internal notes unless `--public-only`: always use it if the document leaves the support team | `uvx zd-cli export-ticket 12345 --public-only` |
+| `linked-incidents` | Get incidents linked to problem | `uvx zd-cli linked-incidents 12345` |
+| `attachment` | Download attachment file | `uvx zd-cli attachment --ticket 12345 <url>` |
 
 ### Write Operations
 
@@ -89,71 +89,72 @@ How the conversion renders in Zendesk:
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `update-ticket` | Update ticket properties | `uv run zd-cli update-ticket 12345 --status pending` |
-| `create-ticket` | Create new ticket (Markdown) | `uv run zd-cli create-ticket "Subject" "**Bold** description"` |
-| `add-note` | Add internal note (Markdown) | `uv run zd-cli add-note 12345 "**Investigation:** found the issue"` |
-| `add-comment` | Add public comment (Markdown) | `uv run zd-cli add-comment 12345 "Here are the steps:\n- Step 1\n- Step 2"` |
+| `update-ticket` | Update ticket properties | `uvx zd-cli update-ticket 12345 --status pending` |
+| `create-ticket` | Create new ticket (Markdown) | `uvx zd-cli create-ticket "Subject" "**Bold** description"` |
+| `add-note` | Add internal note (Markdown) | `uvx zd-cli add-note 12345 "**Investigation:** found the issue"` |
+| `add-comment` | Add public comment (Markdown) | `uvx zd-cli add-comment 12345 "Here are the steps:\n- Step 1\n- Step 2"` |
 
 ### Metrics & Analytics
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `ticket-metrics` | Get reply/resolution times | `uv run zd-cli ticket-metrics 12345` |
-| `list-metrics` | List metrics for tickets | `uv run zd-cli list-metrics` |
-| `satisfaction-ratings` | List CSAT ratings | `uv run zd-cli satisfaction-ratings --score bad` |
-| `satisfaction-rating` | Get single rating | `uv run zd-cli satisfaction-rating 67890` |
+| `ticket-metrics` | Get reply/resolution times | `uvx zd-cli ticket-metrics 12345` |
+| `list-metrics` | List metrics for tickets | `uvx zd-cli list-metrics` |
+| `satisfaction-ratings` | List CSAT ratings | `uvx zd-cli satisfaction-ratings --score bad` |
+| `satisfaction-rating` | Get single rating | `uvx zd-cli satisfaction-rating 67890` |
 
 ### Views (Queue Management)
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `views` | List available views | `uv run zd-cli views` |
-| `view-count` | Get ticket count | `uv run zd-cli view-count 123` |
-| `view-tickets` | Get tickets from view | `uv run zd-cli view-tickets 123` |
+| `views` | List available views | `uvx zd-cli views` |
+| `view-count` | Get ticket count | `uvx zd-cli view-count 123` |
+| `view-tickets` | Get tickets from view | `uvx zd-cli view-tickets 123` |
 
 ### Users & Organizations
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `user` | Get user by ID | `uv run zd-cli user 12345` |
-| `search-users` | Search users | `uv run zd-cli search-users "john@example.com"` |
-| `org` | Get organization by ID | `uv run zd-cli org 67890` |
-| `search-orgs` | Search organizations | `uv run zd-cli search-orgs "Acme"` |
+| `user` | Get user by ID | `uvx zd-cli user 12345` |
+| `search-users` | Search users | `uvx zd-cli search-users "john@example.com"` |
+| `org` | Get organization by ID | `uvx zd-cli org 67890` |
+| `search-orgs` | Search organizations | `uvx zd-cli search-orgs "Acme"` |
 
 ### Authentication
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `auth login` | Configure Zendesk API token credentials | `uv run zd-cli auth login` |
-| `auth login-oauth` | OAuth 2.0 login (opens browser) | `uv run zd-cli auth login-oauth --subdomain co` |
-| `auth status` | Check auth configuration (token + OAuth) | `uv run zd-cli auth status` |
-| `auth logout` | Remove API token credentials | `uv run zd-cli auth logout` |
-| `auth logout-oauth` | Remove OAuth token | `uv run zd-cli auth logout-oauth` |
-| `auth login-slack` | Configure Slack webhook | `uv run zd-cli auth login-slack` |
-| `auth status-slack` | Check Slack configuration | `uv run zd-cli auth status-slack` |
-| `auth logout-slack` | Remove Slack configuration | `uv run zd-cli auth logout-slack` |
+| `auth login` | Configure Zendesk API token credentials | `uvx zd-cli auth login` |
+| `auth login-oauth` | OAuth 2.0 login (opens browser) | `uvx zd-cli auth login-oauth --subdomain co` |
+| `auth status` | Check auth configuration (token + OAuth) | `uvx zd-cli auth status` |
+| `auth logout` | Remove API token credentials | `uvx zd-cli auth logout` |
+| `auth logout-oauth` | Remove OAuth token | `uvx zd-cli auth logout-oauth` |
+| `auth set-oauth-client` | Save or update OAuth client ID/secret (encrypted) | `uvx zd-cli auth set-oauth-client` |
+| `auth login-slack` | Configure Slack webhook | `uvx zd-cli auth login-slack` |
+| `auth status-slack` | Check Slack configuration | `uvx zd-cli auth status-slack` |
+| `auth logout-slack` | Remove Slack configuration | `uvx zd-cli auth logout-slack` |
 
 ### Slack Integration
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `slack-report` | Send support report to Slack | `uv run zd-cli slack-report [analysis_file]` |
-| `markdown-report` | Generate detailed markdown report | `uv run zd-cli markdown-report [analysis_file] -o report.md` |
+| `slack-report` | Send support report to Slack | `uvx zd-cli slack-report [analysis_file]` |
+| `markdown-report` | Generate detailed markdown report | `uvx zd-cli markdown-report [analysis_file] -o report.md` |
 
 ### Configuration
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `groups` | List support groups | `uv run zd-cli groups` |
-| `tags` | List popular tags | `uv run zd-cli tags` |
-| `sla-policies` | List SLA policies | `uv run zd-cli sla-policies` |
-| `me` | Get current user (test auth) | `uv run zd-cli me` |
+| `groups` | List support groups | `uvx zd-cli groups` |
+| `tags` | List popular tags | `uvx zd-cli tags` |
+| `sla-policies` | List SLA policies | `uvx zd-cli sla-policies` |
+| `me` | Get current user (test auth) | `uvx zd-cli me` |
 
 ### Query Tool
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `query` | Query saved JSON with jq | `uv run zd-cli query <file> -q comments_slim` |
+| `query` | Query saved JSON with jq | `uvx zd-cli query <file> -q comments_slim` |
 
 ## Search Query Syntax
 
@@ -237,6 +238,9 @@ After fetching data, use `zd-cli query` with these named queries:
 | `comment_count` | Count by public/private |
 | `latest_comment` | Most recent comment |
 | `messages_by_author` | Comment counts per author, with names |
+| `conversation_stats` | Conversation statistics |
+| `channel_analysis` | Communication channels used, from comment metadata |
+| `call_mentions` | Comments mentioning calls/phone |
 
 > **Read the customer's full message from `comments_full`, not `ticket_summary`.** The ticket `description` (used by `ticket_summary`) drops list items nested inside a numbered list, and Zendesk offers no plain-text alternative for it. The first comment's `plain_body`, returned by `comments_full`, carries the complete text.
 
@@ -249,23 +253,39 @@ After fetching data, use `zd-cli query` with these named queries:
 | `by_priority` | Group by priority |
 | `by_requester` | Group by requester, with names |
 | `top_requesters` | Top 10 requesters by ticket count, with names |
+| `by_organization` | Group by organization |
+| `top_organizations` | Top 10 organizations by ticket count |
 | `pagination` | Pagination info |
+
+### For Other Commands
+| Command | Queries |
+|---------|---------|
+| `linked-incidents`, `view-tickets` | `ids_only`, `summary_list` |
+| `user` | `profile`, `contact_info` |
+| `search-users` | `list`, `emails_only` |
+| `org` / `search-orgs` | `summary` / `list` |
+| `views` | `active_views`, `all_views` |
+| `ticket-metrics` | `kpi_summary` (FRT, resolution, wait times), `times`, `efficiency` (reopens, replies), `timestamps` |
+| `list-metrics` | `frt_summary`, `resolution_summary`, `avg_frt`, `reopen_rate`, `wait_times` |
+| `sla-policies` | `all_targets`, `frt_targets` |
+| `satisfaction-ratings` | `summary`, `scores_only`, `by_score` |
+| `groups`, `tags` | `list` |
 
 ### Custom jq Examples
 ```bash
 # Get specific fields from ticket
-uv run zd-cli query file.json --jq '.data.ticket | {id, subject, status, tags}'
+uvx zd-cli query file.json --jq '.data.ticket | {id, subject, status, tags}'
 
 # Filter comments by author
-uv run zd-cli query file.json --jq '[.data.comments[] | select(.author_name == "Jane Doe")]'
+uvx zd-cli query file.json --jq '[.data.comments[] | select(.author_name == "Jane Doe")]'
 
 # Get timestamps and authors only
-uv run zd-cli query file.json --jq '.data.comments | map({created_at, author_id, author_name})'
+uvx zd-cli query file.json --jq '.data.comments | map({created_at, author_id, author_name})'
 ```
 
 ### List Available Queries
 ```bash
-uv run zd-cli query <file_path> --list
+uvx zd-cli query <file_path> --list
 ```
 
 ## Common Workflows
@@ -274,66 +294,66 @@ uv run zd-cli query <file_path> --list
 
 ```bash
 # 1. Get full ticket details
-uv run zd-cli ticket-details 12345
+uvx zd-cli ticket-details 12345
 # -> Output includes: file_path (e.g., "<temp>/zd-cli-<UID>/12345/ticket_details_xxx.json")
 
 # 2. Get ticket summary (use the file_path from step 1)
-uv run zd-cli query <file_path> -q ticket_summary
+uvx zd-cli query <file_path> -q ticket_summary
 
 # 3. Get conversation (truncated bodies)
-uv run zd-cli query <file_path> -q comments_slim
+uvx zd-cli query <file_path> -q comments_slim
 
 # 4. Check for attachments
-uv run zd-cli query <file_path> -q attachments
+uvx zd-cli query <file_path> -q attachments
 ```
 
 ### Find Related Tickets
 
 ```bash
 # Find all open tickets from same requester
-uv run zd-cli search "requester:user@example.com status:open"
+uvx zd-cli search "requester:user@example.com status:open"
 
 # If it's a problem ticket, find linked incidents
-uv run zd-cli linked-incidents 12345
+uvx zd-cli linked-incidents 12345
 ```
 
 ### Check Queue Health
 
 ```bash
 # Get available views
-uv run zd-cli views
+uvx zd-cli views
 
 # Check ticket count in queue
-uv run zd-cli view-count 123
+uvx zd-cli view-count 123
 
 # Get tickets to triage
-uv run zd-cli view-tickets 123
+uvx zd-cli view-tickets 123
 ```
 
 ### Analyze CSAT
 
 ```bash
 # Find negative ratings
-uv run zd-cli satisfaction-ratings --score bad
+uvx zd-cli satisfaction-ratings --score bad
 
 # Query for details (use file_path from command output)
-uv run zd-cli query <file_path> --jq '.data.satisfaction_ratings | map({ticket_id, score, comment})'
+uvx zd-cli query <file_path> --jq '.data.satisfaction_ratings | map({ticket_id, score, comment})'
 
 # Investigate specific case
-uv run zd-cli ticket-details <ticket_id>
+uvx zd-cli ticket-details <ticket_id>
 ```
 
 ### Update Ticket Status
 
 ```bash
 # Change status and add tag
-uv run zd-cli update-ticket 12345 --status pending --tags "waiting-customer,tier2"
+uvx zd-cli update-ticket 12345 --status pending --tags "waiting-customer,tier2"
 
 # Add internal note with Markdown formatting
-uv run zd-cli add-note 12345 "**Escalated** to tier 2, waiting for response.\n\n- Root cause: config mismatch\n- Next steps: awaiting customer confirmation"
+uvx zd-cli add-note 12345 "**Escalated** to tier 2, waiting for response.\n\n- Root cause: config mismatch\n- Next steps: awaiting customer confirmation"
 
 # Add plain text note (no Markdown conversion)
-uv run zd-cli add-note 12345 "Simple plain text note" --plain-text
+uvx zd-cli add-note 12345 "Simple plain text note" --plain-text
 ```
 
 ## Command Options
@@ -347,7 +367,7 @@ All commands support:
 ### Search Options
 
 ```bash
-uv run zd-cli search "query" [OPTIONS]
+uvx zd-cli search "query" [OPTIONS]
   --page, -p INT       Page number (default: 1)
   --per-page, -n INT   Results per page (default: 25, max: 100)
   --sort, -s TEXT      Sort field
@@ -357,7 +377,7 @@ uv run zd-cli search "query" [OPTIONS]
 ### Update Ticket Options
 
 ```bash
-uv run zd-cli update-ticket TICKET_ID [OPTIONS]
+uvx zd-cli update-ticket TICKET_ID [OPTIONS]
   --status, -s TEXT     New status (open, pending, solved, closed)
   --priority, -p TEXT   New priority (low, normal, high, urgent)
   --assignee, -a TEXT   Assignee ID
@@ -369,7 +389,7 @@ uv run zd-cli update-ticket TICKET_ID [OPTIONS]
 ### Satisfaction Ratings Options
 
 ```bash
-uv run zd-cli satisfaction-ratings [OPTIONS]
+uvx zd-cli satisfaction-ratings [OPTIONS]
   --score, -s TEXT      Filter: good, bad, offered, unoffered
   --start TEXT          Start time (Unix timestamp)
   --end TEXT            End time (Unix timestamp)
@@ -378,7 +398,7 @@ uv run zd-cli satisfaction-ratings [OPTIONS]
 ### Attachment Options
 
 ```bash
-uv run zd-cli attachment [OPTIONS] URL
+uvx zd-cli attachment [OPTIONS] URL
   --ticket, -t TEXT     Ticket ID (organizes download under ticket folder)
   --output, -o PATH     Custom output path (overrides --ticket)
 ```
@@ -391,12 +411,12 @@ Output paths are determined in this order:
 
 1. **`--output PATH`** - Full custom path (highest priority)
    ```bash
-   uv run zd-cli ticket 12345 --output ./my-ticket.json
+   uvx zd-cli ticket 12345 --output ./my-ticket.json
    ```
 
 2. **`--ticket ID`** - Organizes files under `<temp>/zd-cli-<UID>/{ticket_id}/`
    ```bash
-   uv run zd-cli attachment --ticket 12345 <url>
+   uvx zd-cli attachment --ticket 12345 <url>
    # -> <temp>/zd-cli-<UID>/12345/attachments/filename.png
    ```
 
@@ -438,7 +458,7 @@ Two authentication methods are supported. Both can coexist — OAuth takes prior
 Requires an OAuth client configured in Zendesk Admin Center with redirect URL `http://127.0.0.1:8080/callback`.
 
 ```bash
-uv run zd-cli auth login-oauth --subdomain yourcompany --client-id YOUR_ID --client-secret YOUR_SECRET
+uvx zd-cli auth login-oauth --subdomain yourcompany --client-id YOUR_ID --client-secret YOUR_SECRET
 ```
 
 Opens a browser for authorization. For headless environments, add `--manual` to paste the code instead.
@@ -446,14 +466,14 @@ Opens a browser for authorization. For headless environments, add `--manual` to 
 #### Option B: API Token (interactive)
 
 ```bash
-uv run zd-cli auth login
+uvx zd-cli auth login
 # Prompts for email, token (hidden), and subdomain
 ```
 
 #### Option C: API Token (non-interactive)
 
 ```bash
-uv run zd-cli auth login --email "your@email.com" --token "your-token" --subdomain "yourcompany"
+uvx zd-cli auth login --email "your@email.com" --token "your-token" --subdomain "yourcompany"
 ```
 
 #### Option D: Environment Variables
@@ -473,20 +493,20 @@ export ZENDESK_SUBDOMAIN="yourcompany"
 #### Check Auth Status
 
 ```bash
-uv run zd-cli auth status
+uvx zd-cli auth status
 ```
 
 #### Verify Auth Works
 
 ```bash
-uv run zd-cli me
+uvx zd-cli me
 ```
 
 #### Remove Credentials
 
 ```bash
-uv run zd-cli auth logout       # Remove API token
-uv run zd-cli auth logout-oauth  # Remove OAuth token
+uvx zd-cli auth logout       # Remove API token
+uvx zd-cli auth logout-oauth  # Remove OAuth token
 ```
 
 ## Notes for Claude Code Users
@@ -498,7 +518,7 @@ The `zd-cli auth login` command supports both interactive and non-interactive mo
 - **Interactive mode**: Prompts for credentials securely (password hidden). This requires running in the user's terminal.
 - **Non-interactive mode**: Pass credentials via flags for automation:
   ```bash
-  uv run zd-cli auth login --email "you@example.com" --token "your-token" --subdomain "company"
+  uvx zd-cli auth login --email "you@example.com" --token "your-token" --subdomain "company"
   ```
 
 ### When Auth Is Not Configured
@@ -506,7 +526,7 @@ The `zd-cli auth login` command supports both interactive and non-interactive mo
 If credentials are not configured, commands will fail with a helpful error message. The `zd-cli auth status` command provides detailed guidance:
 
 ```bash
-uv run zd-cli auth status
+uvx zd-cli auth status
 ```
 
 If not configured, it will show:
@@ -520,10 +540,10 @@ Before running Zendesk commands for a user, it's helpful to verify auth status f
 
 ```bash
 # Quick auth check
-uv run zd-cli auth status
+uvx zd-cli auth status
 
 # If configured, test it works
-uv run zd-cli me
+uvx zd-cli me
 ```
 
 ## Slack Integration
@@ -534,10 +554,10 @@ Configure Slack to receive support reports:
 
 ```bash
 # Interactive mode
-uv run zd-cli auth login-slack
+uvx zd-cli auth login-slack
 
 # Non-interactive mode
-uv run zd-cli auth login-slack --webhook "https://hooks.slack.com/services/..." --channel "#support-reports"
+uvx zd-cli auth login-slack --webhook "https://hooks.slack.com/services/..." --channel "#support-reports"
 ```
 
 **Getting a Webhook URL:**
@@ -550,13 +570,13 @@ uv run zd-cli auth login-slack --webhook "https://hooks.slack.com/services/..." 
 
 ```bash
 # Send most recent analysis to configured channel
-uv run zd-cli slack-report
+uvx zd-cli slack-report
 
 # Send specific analysis file
-uv run zd-cli slack-report /path/to/support_analysis.json
+uvx zd-cli slack-report /path/to/support_analysis.json
 
 # Override channel
-uv run zd-cli slack-report --channel "#different-channel"
+uvx zd-cli slack-report --channel "#different-channel"
 ```
 
 ### Report Content
@@ -587,17 +607,17 @@ Generate a comprehensive support report with tickets per customer, messages per 
 
 ```bash
 # 1. Search for tickets in time range
-uv run zd-cli search "created>2024-12-22 created<2025-01-22"
+uvx zd-cli search "created>2024-12-22 created<2025-01-22"
 
 # 2. Get ticket details for each result (for message analysis)
-for ticket_id in $(uv run zd-cli query <search_file> -q ids_only | jq -r '.[]'); do
-  uv run zd-cli ticket-details $ticket_id
+for ticket_id in $(uvx zd-cli query <search_file> -q ids_only | jq -r '.[]'); do
+  uvx zd-cli ticket-details $ticket_id
 done
 
 # 3. Run analysis queries on stored data
-uv run zd-cli query <ticket_details_file> -q conversation_stats
-uv run zd-cli query <ticket_details_file> -q call_mentions
-uv run zd-cli query <search_file> -q by_requester
+uvx zd-cli query <ticket_details_file> -q conversation_stats
+uvx zd-cli query <ticket_details_file> -q call_mentions
+uvx zd-cli query <search_file> -q by_requester
 ```
 
 ### Available Analytics Queries
@@ -644,10 +664,10 @@ Customers are identified by:
 To get organization info:
 ```bash
 # Get user with organization
-uv run zd-cli user <user_id>
+uvx zd-cli user <user_id>
 
 # Get organization details
-uv run zd-cli org <org_id>
+uvx zd-cli org <org_id>
 ```
 
 ### Python Analysis Script
@@ -718,8 +738,8 @@ Security is **enabled by default**. Configure in `~/.config/zd-cli/config.json`:
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `security-info` | Show session markers and security status | `uv run zd-cli security-info` |
-| `security-info -i` | Include full MCP security instructions | `uv run zd-cli security-info --instructions` |
+| `security-info` | Show session markers and security status | `uvx zd-cli security-info` |
+| `security-info -i` | Include full MCP security instructions | `uvx zd-cli security-info --instructions` |
 
 ### Interpreting Wrapped Output
 
@@ -754,5 +774,5 @@ uvx prompt-security-utils <file>
 2. **Use named queries first**: They're optimized for common patterns
 3. **Combine queries**: Run multiple jq queries on same file for different views
 4. **Watch for pagination**: Search results may have more pages - check `next_page` in output
-5. **Test auth first**: Use `uv run zd-cli me` to verify credentials work
-6. **Use --help**: All commands have detailed help: `uv run zd-cli search --help`
+5. **Test auth first**: Use `uvx zd-cli me` to verify credentials work
+6. **Use --help**: All commands have detailed help: `uvx zd-cli search --help`
