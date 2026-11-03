@@ -56,12 +56,12 @@ class _TreeBuilder(HTMLParser):
         return self.root
 
     def handle_starttag(self, tag, attrs):
-        if self.dropping:
-            if tag in DROP:
-                self.stack.append((tag, _DROPPED)); self.dropping += 1
-            return
         if tag in DROP:
             self.stack.append((tag, _DROPPED)); self.dropping += 1
+            return
+        if self.dropping:
+            if tag not in VOID:  # tracked so its end tag can't close an element outside the dropped one
+                self.stack.append((tag, None))
             return
         attrs = dict(attrs)
         if tag == "img":
@@ -143,7 +143,7 @@ def _is_block(child: Node | str) -> bool:
 # --------------------------------------------------------------------------
 
 _MD_TEXT = re.compile(r"([\\`*_\[\]<>])")
-_LINE_START = re.compile(r"^(\s*)([#+\-]|\d+[.)])(?=\s)")
+_LINE_START = re.compile(r"^(\s*)([#+\-=]|\d+[.)])(?=\s|[-=]*\s*$)")
 
 
 def _md_text(text: str) -> str:
@@ -190,16 +190,34 @@ def _md_inline(children: list) -> str:
             out.append(f"{fence} {code} {fence}" if code.startswith("`") or code.endswith("`") else f"{fence}{code}{fence}")
         elif c.tag == "a":
             inner = _md_inline(c.children).strip()
-            out.append(f"[{inner or c.href}]({_md_url(c.href)})" if c.href else inner)
+            out.append(f"[{inner or _md_text(c.href)}]({_md_url(c.href)})" if c.href else inner)
         else:  # u, and anything else transparent
             out.append(_md_inline(c.children))
     return "".join(out)
 
 
+def _escape_line_start(m: re.Match) -> str:
+    # backslash goes before the punctuation: "\1." is not an escape, "1\." is
+    lead, mark = m.group(1), m.group(2)
+    return f"{lead}{mark[:-1]}\\{mark[-1]}"
+
+
 def _paragraph(text: str) -> str | None:
-    lines = [_LINE_START.sub(lambda m: f"{m.group(1)}\\{m.group(2)}", ln.strip()) for ln in text.split("\n")]
-    text = "\n".join(ln for ln in lines)
+    lines = [
+        _LINE_START.sub(_escape_line_start, ln.strip()) + ("  " if ln.endswith("  ") else "")
+        for ln in text.split("\n")
+    ]
+    text = "\n".join(lines)
     return text.strip("\n") if text.strip() else None
+
+
+def _rows(table: Node):
+    """<tr> rows of a table in document order, including those inside thead/tbody/tfoot."""
+    for ch in table.children:
+        if isinstance(ch, Node) and ch.tag == "tr":
+            yield ch
+        elif isinstance(ch, Node) and ch.tag in ("thead", "tbody", "tfoot"):
+            yield from _rows(ch)
 
 
 def _md_blocks(children: list) -> list[str]:
@@ -226,16 +244,20 @@ def _md_blocks(children: list) -> list[str]:
             fence = "`" * max(3, max((len(m) for m in re.findall(r"`+", code)), default=0) + 1)
             blocks.append(f"{fence}\n{code}\n{fence}")
         elif tag in ("ul", "ol"):
-            items = []
-            n = 0
+            groups: list[tuple[str, list[str]]] = []  # (marker, blocks) per item
             for li in c.children:
-                if not (isinstance(li, Node) and li.tag == "li"):
-                    continue
-                n += 1
-                marker = f"{n}. " if tag == "ol" else "- "
-                inner = _md_blocks(li.children) or [""]
+                if isinstance(li, Node) and li.tag == "li":
+                    marker = f"{len(groups) + 1}. " if tag == "ol" else "- "
+                    groups.append((marker, _md_blocks(li.children) or [""]))
+                elif inner := _md_blocks([li]):  # e.g. <ul><li>a</li><ul>..</ul></ul> from Outlook/Gmail
+                    if groups:
+                        groups[-1][1].extend(inner)
+                    else:
+                        groups.append(("", inner))
+            items = []
+            for marker, inner in groups:
                 joined = inner[0]
-                for prev, block in zip(inner, inner[1:]):  # keep a nested list tight against its item
+                for block in inner[1:]:  # keep a nested list tight against its item
                     joined += ("\n" if re.match(r"(?:- |\d+\. )", block) else "\n\n") + block
                 first, *rest = joined.split("\n")
                 pad = " " * len(marker)
@@ -251,17 +273,8 @@ def _md_blocks(children: list) -> list[str]:
             if text:
                 blocks.append(f"**{text}**" if not text.startswith("**") else text)
         elif tag == "table":
-            rows = []
-            stack = [c]
-            while stack:
-                n_ = stack.pop(0)
-                for ch in n_.children:
-                    if isinstance(ch, Node) and ch.tag == "tr":
-                        rows.append(ch)
-                    elif isinstance(ch, Node) and ch.tag in ("thead", "tbody", "tfoot"):
-                        stack.insert(0, ch)
             lines = []
-            for tr in rows:
+            for tr in _rows(c):
                 cells = [
                     _md_inline(td.children).strip().replace("\n", " ").replace("|", "\\|")
                     for td in tr.children if isinstance(td, Node) and td.tag in ("td", "th")
@@ -273,9 +286,7 @@ def _md_blocks(children: list) -> list[str]:
                     lines.append("|" + " --- |" * len(cells))
             if lines:
                 blocks.append("\n".join(lines))
-        elif tag in ("tr", "td", "th", "li", "dt", "dd"):
-            blocks.extend(_md_blocks(c.children))  # stray table/list parts: keep their text
-        else:  # p, div, section, ...
+        else:  # p, div, section, stray table/list parts, ...
             blocks.extend(_md_blocks(c.children))
     flush()
     return blocks
@@ -340,4 +351,4 @@ def _html_children(children: list) -> str:
 def to_html(root: Node) -> str:
     """Sanitised HTML fragment for a parsed body ('' if nothing readable)."""
     out = _html_children(root.children)
-    return out if _text_of(root).strip() or "<img" in out or "[image" in out else ""
+    return out if _text_of(root).strip() or "[image" in out else ""

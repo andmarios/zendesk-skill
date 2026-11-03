@@ -25,7 +25,7 @@ from zendesk_skill.enrich import enrich_tickets, with_warnings
 from zendesk_skill.export import normalize_format, render_html, render_markdown, scrub_text
 from zendesk_skill.formatting import format_for_zendesk
 from zendesk_skill.queries import get_queries_for_tool
-from zendesk_skill.storage import _get_storage_dir, save_response, write_private_text
+from zendesk_skill.storage import _get_storage_dir, ensure_private_dir, save_response, write_private_text
 from zendesk_skill.utils.security import (
     generate_markers,
     is_security_enabled,
@@ -246,6 +246,9 @@ async def get_ticket_details(
     }, warnings)
 
 
+MAX_COMMENT_PAGES = 50  # 100 comments per page
+
+
 async def export_ticket(
     ticket_id: str,
     fmt: str = "md",
@@ -293,7 +296,8 @@ async def export_ticket(
 
     comments: list[dict] = []
     page_results = [result]
-    for page in range(1, 51):  # hard cap: 5000 comments
+    truncated = False
+    for page in range(1, MAX_COMMENT_PAGES + 1):
         page_result = await client.get(
             f"tickets/{ticket_id}/comments.json",
             params={"page": page, "per_page": 100, "include": "users"},
@@ -302,6 +306,8 @@ async def export_ticket(
         comments.extend(page_result.get("comments", []))
         if not page_result.get("next_page"):
             break
+    else:
+        truncated = True
 
     internal_notes = sum(1 for c in comments if not c.get("public"))
     if public_only:
@@ -311,6 +317,8 @@ async def export_ticket(
         extra["text_only"] = True
 
     warnings = await enrich_tickets(client, [ticket], comments, sideloads=tuple(page_results))
+    if truncated:
+        warnings.append(f"Conversation truncated: only the first {len(page_results) - 1} page(s) of comments were exported")
 
     # Lookup problems are also written into the document, so a reader can tell
     # "no CCs" from "CC lookup failed" (the export's counterpart of the
@@ -333,7 +341,7 @@ async def export_ticket(
     if write_file:
         if output_path:
             path = Path(output_path).expanduser()
-            path.parent.mkdir(parents=True, exist_ok=True)
+            path = ensure_private_dir(path.parent) / path.name
         else:
             # A public-only export gets its own name so it can never overwrite (or be
             # mistaken for) the full export that includes internal notes.

@@ -707,3 +707,35 @@ async def test_malformed_lookup_responses_become_warnings_not_failures(monkeypat
     result = await operations.export_ticket("7", "md", str(tmp_path / "t.md"))
 
     assert result["comment_count"] == 2 and result["warnings"]      # the export still completed
+
+
+# ----------------------------------------------------------- review fixes
+
+
+@pytest.mark.parametrize("render", [export.render_markdown, export.render_html])
+def test_public_only_never_falls_back_to_the_description(render):
+    # description is the first comment's text, which may be an internal note
+    doc = render({"id": 7, "subject": "S", "description": "secret note"}, [], {"public_only": True})
+    assert "secret note" not in doc
+
+
+@pytest.mark.parametrize("render", [export.render_markdown, export.render_html])
+def test_zero_valued_custom_fields_are_shown(render):
+    ticket = {"id": 7, "custom_fields": [{"id": 1, "title": "Affected nodes", "value": 0}]}
+    assert "Affected nodes" in render(ticket, [])
+
+
+@pytest.mark.asyncio
+async def test_truncated_conversation_is_reported(monkeypatch, tmp_path):
+    many = [dict(PUBLIC, id=i) for i in range(1, 7)]
+    monkeypatch.setattr(operations, "_get_client", lambda: FakeClient(comments=many, pages=3))
+    monkeypatch.setattr(operations, "MAX_COMMENT_PAGES", 2)
+    result = await operations.export_ticket("7", "md", str(tmp_path / "t.md"))
+    assert any("truncated" in w for w in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_explicit_output_inside_the_store_gets_private_dirs(client):
+    out = storage.DEFAULT_STORAGE_DIR / "7" / "sub" / "t.md"
+    await operations.export_ticket("7", "md", str(out))
+    assert oct(out.parent.stat().st_mode & 0o777) == "0o700"

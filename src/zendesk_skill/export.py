@@ -66,7 +66,7 @@ def display_value(field: dict) -> str:
 
 def _has_value(field: dict) -> bool:
     value = field.get("value")
-    return value not in (None, "", [], False)
+    return value is not False and value not in (None, "", [])
 
 
 def _comment_body(comment: dict) -> str:
@@ -98,6 +98,13 @@ def _rich_body(comment: dict, extra: dict) -> richtext.Node | None:
 def _notes(extra: dict) -> list[str]:
     """Lookup/scrub notes to show in the document (empty when everything resolved)."""
     return [str(w) for w in extra.get("warnings") or []]
+
+
+def _empty_conversation(ticket: dict, extra: dict) -> str:
+    # description is the first comment's text, which may be an internal note
+    if extra.get("public_only"):
+        return "(no public replies)"
+    return ticket.get("description") or "(no comments)"
 
 
 def _banner(comments: list[dict], extra: dict) -> str | None:
@@ -219,10 +226,6 @@ def _md_body_line(line: str) -> str:
     return line.replace("<", "\\<")
 
 
-def _md_url(url: str) -> str:
-    return url.replace(" ", "%20").replace("(", "%28").replace(")", "%29")
-
-
 def render_markdown(ticket: dict, comments: list[dict], extra: dict | None = None) -> str:
     """Render the ticket as a Markdown document."""
     extra = extra or {}
@@ -231,8 +234,9 @@ def render_markdown(ticket: dict, comments: list[dict], extra: dict | None = Non
     banner = _banner(comments, extra)
     if banner:
         out += [f"> **{'⚠ ' if not extra.get('public_only') else ''}{banner}**", ""]
-    if _notes(extra):
-        out += ["> **Export notes**", ">"] + [f"> - {md_inline(n)}" for n in _notes(extra)] + [""]
+    notes = _notes(extra)
+    if notes:
+        out += ["> **Export notes**", ">"] + [f"> - {md_inline(n)}" for n in notes] + [""]
 
     for label, value in _meta(ticket, extra):
         out.append(f"- **{label}:** {value if label == 'URL' else md_inline(value)}")
@@ -251,15 +255,16 @@ def render_markdown(ticket: dict, comments: list[dict], extra: dict | None = Non
 
     out += [f"## Conversation ({len(comments)})", ""]
     if not comments:
-        out += [_md_body_line(ticket.get("description") or "(no comments)"), ""]
+        out += [_md_body_line(_empty_conversation(ticket, extra)), ""]
     for i, c in enumerate(comments, 1):
         who = c.get("author_name") or f"user {c.get('author_id')}"
         kind = "Public reply" if c.get("public") else "Internal note"
         channel = (c.get("via") or {}).get("channel")
         via = f" via {channel}" if channel else ""
         out += [f"### {i}. {md_inline(who)} — {kind}{md_inline(via)}", f"*{md_inline(c.get('created_at'))}*", ""]
-        if _recipient_line(c):
-            out += [f"*{md_inline(_recipient_line(c))}*", ""]
+        recipients = _recipient_line(c)
+        if recipients:
+            out += [f"*{md_inline(recipients)}*", ""]
         rich = _rich_body(c, extra)
         rich_md = richtext.to_markdown(rich) if rich else ""
         if rich_md:
@@ -268,11 +273,12 @@ def render_markdown(ticket: dict, comments: list[dict], extra: dict | None = Non
             body = _comment_body(c) or "(empty)"
             out += [f"> {_md_body_line(line)}" if line else ">" for line in body.splitlines()]
         out.append("")
-        for a in _attachments(c):
+        atts = _attachments(c)
+        for a in atts:
             url = _http_url(a.get("content_url"))
             name = md_inline(a.get("file_name"))
-            out.append(f"- Attachment: [{name}]({_md_url(url)})" if url else f"- Attachment: {name}")
-        if _attachments(c):
+            out.append(f"- Attachment: [{name}]({richtext._md_url(url)})" if url else f"- Attachment: {name}")
+        if atts:
             out.append("")
     return "\n".join(out).rstrip() + "\n"
 
@@ -322,9 +328,10 @@ def render_html(ticket: dict, comments: list[dict], extra: dict | None = None) -
         cls = "banner info" if extra.get("public_only") else "banner"
         icon = "" if extra.get("public_only") else "⚠ "
         out.append(f'<p class="{cls}">{icon}{_e(banner)}</p>')
-    if _notes(extra):
+    notes = _notes(extra)
+    if notes:
         out.append('<div class="notes"><strong>Export notes</strong><ul>'
-                   + "".join(f"<li>{_e(n)}</li>" for n in _notes(extra)) + "</ul></div>")
+                   + "".join(f"<li>{_e(n)}</li>" for n in notes) + "</ul></div>")
     out.append("<dl>")
     for label, value in _meta(ticket, extra):
         if label == "URL" and _safe_href(value):
@@ -347,7 +354,7 @@ def render_html(ticket: dict, comments: list[dict], extra: dict | None = None) -
 
     out.append(f"<h2>Conversation ({len(comments)})</h2>")
     if not comments:
-        out.append(f'<div class="comment"><div class="body">{_e(ticket.get("description") or "(no comments)")}</div></div>')
+        out.append(f'<div class="comment"><div class="body">{_e(_empty_conversation(ticket, extra))}</div></div>')
     for i, c in enumerate(comments, 1):
         who = c.get("author_name") or f"user {c.get('author_id')}"
         kind = "Public reply" if c.get("public") else "Internal note"

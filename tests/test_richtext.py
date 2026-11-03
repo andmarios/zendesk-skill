@@ -37,13 +37,13 @@ def test_markdown_keeps_structure():
     assert "- one\n- two\n  - nested" in out                  # tight nested list
     assert "1. first\n2. second" in out
     assert "**Heading**" in out
-    assert "> quoted\n> line" in out
+    assert "> quoted  \n> line" in out
     assert "```\n  code\n    block\n```" in out                # whitespace kept in <pre>
     assert "``a`b``" in out                                    # backtick inside inline code
     assert "\n---\n" in out
     assert "| A | B |\n| --- | --- |\n| 1 | x\\|y |" in out
     assert "[image: logo]" in out
-    assert "Line one\nLine two\nLine \\<three\\> done" in out  # <br> becomes a line break
+    assert "Line one  \nLine two  \nLine \\<three\\> done" in out  # <br> becomes a hard line break
 
 
 def test_html_keeps_structure():
@@ -100,7 +100,7 @@ def test_escaped_markup_in_text_stays_text():
 def test_markdown_syntax_in_text_is_escaped():
     out = md("<p>*not bold* _not em_ [not](a) `no` # nope\n- no</p>")
     assert out == "\\*not bold\\* \\_not em\\_ \\[not\\](a) \\`no\\` # nope - no"
-    assert md("<p># heading?</p><p>- item?</p><p>1. one?</p>") == "\\# heading?\n\n\\- item?\n\n\\1. one?"
+    assert md("<p># heading?</p><p>- item?</p><p>1. one?</p>") == "\\# heading?\n\n\\- item?\n\n1\\. one?"
 
 
 def test_link_urls_cannot_break_out_of_markdown_links():
@@ -139,3 +139,33 @@ def test_unclosed_script_drops_the_rest_safely():
 def test_too_large_or_empty_bodies_fall_back():
     assert richtext.parse("") is None
     assert richtext.parse("x" * (richtext.MAX_HTML_CHARS + 1)) is None
+
+
+# ------------------------------------------------------------ review fixes
+
+
+def test_link_without_text_escapes_its_href_as_text():
+    out = md('<a href="https://x.com/<img src=x onerror=alert(1)>"></a>')
+    assert not re.search(r"(?<!\\)<", out.split("](")[0])  # only escaped \<
+
+
+def test_table_sections_keep_document_order():
+    out = md("<table><thead><tr><th>H1</th><th>H2</th></tr></thead>"
+             "<tbody><tr><td>a</td><td>b</td></tr></tbody></table>")
+    assert out == "| H1 | H2 |\n| --- | --- |\n| a | b |"
+
+
+def test_list_nested_directly_in_a_list_is_kept():
+    assert md("<ul><li>a</li><ul><li>nested</li></ul><li>b</li></ul>") == "- a\n  - nested\n- b"
+
+
+def test_br_stays_a_hard_line_break():
+    assert md("<p>line1<br>line2<br>line3</p>") == "line1  \nline2  \nline3"
+
+
+def test_line_of_dashes_cannot_become_a_setext_heading():
+    assert md("<p>title<br>---</p>") == "title  \n\\---"
+
+
+def test_end_tag_inside_a_dropped_element_does_not_end_the_drop():
+    assert md("<div><svg><div>secret</div>leaked</svg>after</div>") == "after"
