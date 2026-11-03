@@ -575,9 +575,9 @@ def export_ticket_cmd(
     and flagged unless --public-only is given.
 
     The document contains customer-controlled text. Raw HTML is neutralised and terminal
-    control characters are replaced, but Markdown written by customers (emphasis, links) is
-    left as written: open exports of untrusted tickets in a viewer that sanitises links, or
-    use --format html, which escapes everything.
+    control characters are replaced. Plain-text bodies (--text-only, or no html_body) keep
+    Markdown written by customers (emphasis, links) as written: open such exports in a viewer
+    that sanitises links, or use --format html, which escapes everything.
     """
     write_file = (not stdout) or output_path is not None
     result = run_async(
